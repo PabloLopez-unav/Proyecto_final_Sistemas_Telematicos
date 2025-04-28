@@ -1,6 +1,6 @@
 
 // AccionamientosDlg.h : header file
-//
+// Aquí
 
 #pragma once
 

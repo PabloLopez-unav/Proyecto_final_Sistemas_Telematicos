@@ -12,6 +12,10 @@
 #define new DEBUG_NEW
 #endif
 
+short Trans = 10;
+bool encendido = 0;
+bool encendido2 = 0;
+bool encendido3 = 0;
 
 // CClienteDlg dialog
 
@@ -69,6 +73,9 @@ BOOL CClienteDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// Set small icon
 
 	// TODO: Add extra initialization here
+
+	SetWindowText(_T("Centralita"));
+
 
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -135,59 +142,338 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 {
 	if (nIDEvent == 1 && pollingActivo)
 	{
-		PollingLuces();
+		PollingLuces_Freno();
+		PollingLuces_Int_Der();
+		PollingLuces_Int_Izq();
+
+
+
 	}
 
 	CDialogEx::OnTimer(nIDEvent);
 }
 
-void CClienteDlg::PollingLuces()
+void CClienteDlg::PollingLuces_Freno()
 {
-	UpdateData(TRUE); // Leer IP y puerto de luces
-	if (m_ip.IsEmpty() || m_port == 0) {
-		EscribirLog("IP o Puerto de Luces no válido");
-		return;
-	}
-
-	if (!misoc.Create()) {
-		EscribirLog("Error creando socket");
-		return;
-	}
-
-	if (!misoc.Connect(m_ip, m_port)) {
-		EscribirLog("No se pudo conectar al servidor de luces");
+	UpdateData();
+	// Intento crear el Socket con el Slave
+	CSocket misoc;
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_portacc)) {
 		misoc.Close();
+		MessageBox("Fallo en creacion..");
 		return;
 	}
 
-	buf[0] = trans >> 8;
-	buf[1] = trans & 0xFF;
-	trans++;
+	//Mando datos
+	unsigned char buf[20];
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 400 / 256;
+	buf[9] = 400 % 256;
+	buf[10] = encendido / 256;
+	buf[11] = encendido % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
 
-	buf[2] = 0; buf[3] = 0;
-	buf[4] = 0; buf[5] = 6;
-
-	buf[6] = 1;         // Unit ID
-	buf[7] = 0x03;      // Function Code 0x03: Read Holding Registers
-
-	buf[8] = 0x01;
-	buf[9] = 0xF4;      // Address 500 (0x01F4)
-
-	buf[10] = 0x00;
-	buf[11] = 0x05;     // Leer 5 registros
-
-	misoc.Send(buf, 12);
-
-	int len_res = misoc.Receive(res, 260);
-	if (len_res > 0) {
-		ProcesarRespuestaLuces();
+	// Verifico que me responde
+	unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	short TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox("Respuesta no recibida..");
 	}
-	else {
-		EscribirLog("No se recibió respuesta de luces");
+
+	// Cierro el socket
+	misoc.Close();
+
+	// leo encendido de respuesta, encendido es un booleano
+
+	encendido = resp[10] * 256 + resp[11];
+
+
+	//-------------------------------------------------------------------------------
+	// No hace falta definir el mismo nombre otra vez que da error
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
+		misoc.Close();
+		MessageBox("Fallo en creacion..");
+		return;
 	}
 
+	//Mando datos
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 500 / 256;
+	buf[9] = 500 % 256;
+	buf[10] = encendido / 256;
+	buf[11] = encendido % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	// unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	// short  // no la vuelvo a redefinir
+	TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox("Respuesta no recibida..");
+	}
+
+	// Cierro el socket
 	misoc.Close();
 }
+
+void CClienteDlg::PollingLuces_Int_Izq() {
+	UpdateData();
+	// Intento crear el Socket con el Slave
+	CSocket misoc;
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_portacc)) {
+		misoc.Close();
+		MessageBox(_T("Fallo en creacion.."));
+		return;
+	}
+
+	//Mando datos
+	encendido2 = 1;
+	unsigned char buf[20];
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 401 / 256;
+	buf[9] = 401 % 256;
+	buf[10] = encendido2 / 256;
+	buf[11] = encendido2 % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	short TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox(_T("Respuesta no recibida.."));
+	}
+
+	// Cierro el socket
+	misoc.Close();
+
+	// leo encendido de respuesta, encendido es un booleano
+
+	encendido2 = resp[10] * 256 + resp[11];
+
+
+	//---------------------intermitente delante--------------------------------------
+	// No hace falta definir el mismo nombre otra vez que da error
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
+		misoc.Close();
+		MessageBox("Fallo en creacion..");
+		return;
+	}
+
+	//Mando datos
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 501 / 256;
+	buf[9] = 501 % 256;
+	buf[10] = encendido2 / 256;
+	buf[11] = encendido2 % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	// unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	// short  // no la vuelvo a redefinir
+	TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox("Respuesta no recibida..");
+	}
+
+	// Cierro el socket
+	misoc.Close();
+
+	// intermitente detras
+
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
+		misoc.Close();
+		MessageBox("Fallo en creacion..");
+		return;
+	}
+
+	//Mando datos
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 503 / 256;
+	buf[9] = 503 % 256;
+	buf[10] = encendido2 / 256;
+	buf[11] = encendido2 % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	// unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	// short  // no la vuelvo a redefinir
+	TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox("Respuesta no recibida..");
+	}
+
+	// Cierro el socket
+	misoc.Close();
+}
+
+void CClienteDlg::PollingLuces_Int_Der() {
+	UpdateData();
+	// Intento crear el Socket con el Slave
+	CSocket misoc;
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_portacc)) {
+		misoc.Close();
+		MessageBox(_T("Fallo en creacion.."));
+		return;
+	}
+
+	//Mando datos
+	encendido2 = 1;
+	unsigned char buf[20];
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 402 / 256;
+	buf[9] = 402 % 256;
+	buf[10] = encendido2 / 256;
+	buf[11] = encendido2 % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	short TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox(_T("Respuesta no recibida.."));
+	}
+
+	// Cierro el socket
+	misoc.Close();
+
+	// leo encendido de respuesta, encendido es un booleano
+
+	encendido2 = resp[10] * 256 + resp[11];
+
+
+	//---------------------intermitente delante--------------------------------------
+	// No hace falta definir el mismo nombre otra vez que da error
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
+		misoc.Close();
+		MessageBox("Fallo en creacion..");
+		return;
+	}
+
+	//Mando datos
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 502 / 256;
+	buf[9] = 502 % 256;
+	buf[10] = encendido2 / 256;
+	buf[11] = encendido2 % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	// unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	// short  // no la vuelvo a redefinir
+	TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox("Respuesta no recibida..");
+	}
+
+	// Cierro el socket
+	misoc.Close();
+
+	// intermitente detras
+
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
+		misoc.Close();
+		MessageBox("Fallo en creacion..");
+		return;
+	}
+
+	//Mando datos
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 504 / 256;
+	buf[9] = 504 % 256;
+	buf[10] = encendido2 / 256;
+	buf[11] = encendido2 % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	// unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	// short  // no la vuelvo a redefinir
+	TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox("Respuesta no recibida..");
+	}
+
+	// Cierro el socket
+	misoc.Close();
+}
+
+
+
+
+
+
+
 void CClienteDlg::ProcesarRespuestaLuces()
 {
 	if (res[7] == 0x03)
