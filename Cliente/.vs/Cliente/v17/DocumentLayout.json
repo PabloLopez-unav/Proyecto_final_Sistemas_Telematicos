@@ -1,0 +1,36 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\costa\\Desktop\\Sistemas Multimedia\\Proyecto_final_Sistemas_Telematicos\\Cliente\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{5687C1A5-CA02-A2B0-6011-AB6EA3A20B70}|Cliente.vcxproj|C:\\Users\\costa\\Desktop\\Sistemas Multimedia\\Proyecto_final_Sistemas_Telematicos\\Cliente\\Cliente.rc||{177559E0-D141-11D0-92DF-00A0C9138C45}|,   b e g i n       % \u0086 )$  \u0022     ",
+      "RelativeMoniker": "D:0:0:{5687C1A5-CA02-A2B0-6011-AB6EA3A20B70}|Cliente.vcxproj|solutionrelative:Cliente.rc||{177559E0-D141-11D0-92DF-00A0C9138C45}|,   b e g i n       % \u0086 )$  \u0022     "
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Cliente.rc - IDD_CLIENTE_DIALOG [English (United States)] - Dialog",
+              "DocumentMoniker": "C:\\Users\\costa\\Desktop\\Sistemas Multimedia\\Proyecto_final_Sistemas_Telematicos\\Cliente\\Cliente.rc",
+              "RelativeDocumentMoniker": "Cliente.rc",
+              "ToolTip": "C:\\Users\\costa\\Desktop\\Sistemas Multimedia\\Proyecto_final_Sistemas_Telematicos\\Cliente\\Cliente.rc - IDD_CLIENTE_DIALOG [English (United States)] - Dialog",
+              "RelativeToolTip": "Cliente.rc - IDD_CLIENTE_DIALOG [English (United States)] - Dialog",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001005|",
+              "WhenOpened": "2025-04-28T13:36:07.667Z",
+              "EditorCaption": " - IDD_CLIENTE_DIALOG [English (United States)] - Dialog"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
