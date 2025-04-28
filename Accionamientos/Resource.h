@@ -6,7 +6,6 @@
 #define IDP_SOCKETS_INIT_FAILED         103
 #define IDR_MAINFRAME                   128
 #define IDC_START                       1000
-#define IDC_BOT_FRENO                   1001
 #define IDC_PORT                        1001
 #define IDC_BOTON_FRENO                 1005
 #define IDC_BOT_INT_IZQ                 1006

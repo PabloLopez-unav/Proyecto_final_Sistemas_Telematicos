@@ -17,6 +17,7 @@ bool freno = 0;
 bool int_izq = 0;
 bool int_der = 0;
 
+bool start = 0;
 
 // CAccionamientosDlg dialog
 
@@ -47,6 +48,7 @@ void CAccionamientosDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CAccionamientosDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_BN_CLICKED(IDC_START, &CAccionamientosDlg::OnBnClickedStart)
 END_MESSAGE_MAP()
 
 
@@ -117,6 +119,7 @@ HCURSOR CAccionamientosDlg::OnQueryDragIcon()
 
 void CMySocket::OnAccept(int err)
 {
+	
 	CString cs, cs1;
 	CSocket client;
 	Accept(client);  // MySocket acepta el Maestro
@@ -144,9 +147,18 @@ void CMySocket::OnAccept(int err)
 				else if (dir == 402) {
 					buf[11] = pDlg->m_boton_int_der;
 				}
+				else if (dir == 570) {
+					buf[11] = start;
+				}
 				client.Send(buf, 20);
 			}
 		}
 	}
 	client.Close();
+	
+	
+}
+void CAccionamientosDlg::OnBnClickedStart()
+{
+	start = !start;
 }

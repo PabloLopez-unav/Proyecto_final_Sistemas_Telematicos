@@ -51,4 +51,5 @@ public:
 	int dir_led_arr_der;
 	int dir_led_deb_izq;
 	int dir_led_deb_der;
+	afx_msg void OnBnClickedStart();
 };

@@ -17,6 +17,9 @@ bool encendido = 0;
 bool encendido2 = 0;
 bool encendido3 = 0;
 
+bool start = 0;
+bool start2 = 0;
+
 // CClienteDlg dialog
 
 CClienteDlg::CClienteDlg(CWnd* pParent /*=nullptr*/)
@@ -142,17 +145,158 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 {
 	if (nIDEvent == 1 && pollingActivo)
 	{
-		PollingLuces_Freno();
-		PollingLuces_Int_Der();
-		PollingLuces_Int_Izq();
+		if (StartLuces() == 0) {
+			CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+
+			CDC* pdc = pDlg->m_ledluces.GetDC();
+			CRect r;
+			pDlg->m_ledluces.GetClientRect(r);
+			CBrush red(RGB(255, 0, 0));
+			pdc->FillRect(r, &red);
 
 
+		}
+		else {
+
+			CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+
+			CDC* pdc = pDlg->m_ledluces.GetDC();
+			CRect r;
+			pDlg->m_ledluces.GetClientRect(r);
+			CBrush green(RGB(0, 255, 0));
+			pdc->FillRect(r, &green);
+
+		}
+
+		if (StartAccionador() == 0) {
+			CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+
+			CDC* pdc = pDlg->m_ledacc.GetDC();
+			CRect r;
+			pDlg->m_ledacc.GetClientRect(r);
+			CBrush red(RGB(255, 0, 0));
+			pdc->FillRect(r, &red);
+		}
+		else {
+			CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+			CDC* pdc = pDlg->m_ledacc.GetDC();
+			CRect r;
+			pDlg->m_ledacc.GetClientRect(r);
+			CBrush green(RGB(0, 255, 0));
+			pdc->FillRect(r, &green);
+		}
+		// faltan los logs, que nos es más que meterle como texto a la funcion 
+		// si ha cambiado la variable encendido, ence..2 , ence..3 y dicho cambio,
+		// yo lo hago en 5 mins, pero ahora estoy cansando la verdad
+
+		if (StartAccionador() == true && StartLuces() == true)
+		{
+			PollingLuces_Freno();
+			PollingLuces_Int_Der();
+			PollingLuces_Int_Izq();
+		}
 
 	}
 
 	CDialogEx::OnTimer(nIDEvent);
 }
 
+bool CClienteDlg::StartLuces() {
+	UpdateData();
+	// Intento crear el Socket con el Slave
+	CSocket misoc;
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
+		misoc.Close();
+		MessageBox(_T("Fallo en creacion.."));
+		start = 0;
+		return start;
+	}
+
+	//Mando datos
+	encendido2 = 1;
+	unsigned char buf[20];
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 566 / 256;
+	buf[9] = 566 % 256;
+	buf[10] = start / 256;
+	buf[11] = start % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	short TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox(_T("Respuesta no recibida.."));
+	}
+
+	// Cierro el socket
+	misoc.Close();
+
+	// leo encendido de respuesta, encendido es un booleano
+	start = resp[10] * 256 + resp[11];
+
+
+	return start;
+
+}
+
+bool CClienteDlg::StartAccionador(){
+	UpdateData();
+	// Intento crear el Socket con el Slave
+	CSocket misoc;
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_portacc)) {
+		misoc.Close();
+		MessageBox(_T("Fallo en creacion.."));
+		start = 0;
+		return start2;
+	}
+
+	//Mando datos
+	encendido2 = 1;
+	unsigned char buf[20];
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 570 / 256;
+	buf[9] = 570 % 256;
+	buf[10] = start2 / 256;
+	buf[11] = start2 % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	short TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox(_T("Respuesta no recibida.."));
+	}
+
+	// Cierro el socket
+	misoc.Close();
+
+	// leo encendido de respuesta, encendido es un booleano
+	start2 = resp[10] * 256 + resp[11];
+
+
+	return start2;
+}
+
+//-------------------------------------------------------------------------------
 void CClienteDlg::PollingLuces_Freno()
 {
 	UpdateData();
@@ -467,7 +611,7 @@ void CClienteDlg::PollingLuces_Int_Der() {
 	// Cierro el socket
 	misoc.Close();
 }
-
+//-------------------------------------------------------------------------------
 
 
 

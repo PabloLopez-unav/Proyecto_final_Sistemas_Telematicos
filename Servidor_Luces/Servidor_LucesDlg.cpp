@@ -18,7 +18,7 @@ bool enc_led_arr_der = 0;
 bool enc_led_deb_izq = 0;
 bool enc_led_deb_der = 0;
 
-
+bool start = 0;
 
 // CServidorLucesDlg dialog
 
@@ -52,6 +52,7 @@ void CServidorLucesDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CServidorLucesDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_BN_CLICKED(IDC_START, &CServidorLucesDlg::OnBnClickedStart)
 END_MESSAGE_MAP()
 
 
@@ -82,7 +83,7 @@ BOOL CServidorLucesDlg::OnInitDialog()
 
 	UpdateData(0);
 
-	SetWindowText(_T("Esclavo ModBus"));
+	SetWindowText(_T("Luces"));
 
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -220,6 +221,9 @@ void CMySocket::OnAccept(int err)
 						pdc->FillRect(r, &grey);
 					}
 				}
+				else if (dir == 566) {
+					buf[11] = start;
+				}
 				client.Send(buf, 20);
 			}
 		}
@@ -229,3 +233,8 @@ void CMySocket::OnAccept(int err)
 
 
 
+
+void CServidorLucesDlg::OnBnClickedStart()
+{
+	start = !start;
+}

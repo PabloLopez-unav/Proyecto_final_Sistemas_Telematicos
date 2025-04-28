@@ -1,6 +1,6 @@
 
 // AccionamientosDlg.h : header file
-// Aquí
+// 
 
 #pragma once
 
@@ -46,4 +46,5 @@ public:
 	int dir_freno;
 	int dir_int_der;
 	int dir_int_izq;
+	afx_msg void OnBnClickedStart();
 };

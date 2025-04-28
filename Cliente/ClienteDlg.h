@@ -46,6 +46,10 @@ private:
 	CString ip = "127.0.0.1"; // O la IP real de tu servidor de luces
 	int port = 5020;
 
+	bool StartLuces();
+	bool StartAccionador();
+
+
 	void PollingLuces_Freno();
 	void PollingLuces_Int_Der();
 	void PollingLuces_Int_Izq();
