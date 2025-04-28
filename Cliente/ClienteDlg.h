@@ -50,7 +50,6 @@ private:
 	void ProcesarRespuestaLuces();
 	void EscribirLog(const CString& texto);
 public:
-	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	CString m_ipacc;
 	int m_portacc;
 	CStatic m_ledacc;
@@ -62,4 +61,5 @@ public:
 	CStatic m_velocidad;
 	CStatic m_revoluciones;
 	CEdit m_logs;
+	afx_msg void OnBnClickedClear();
 };
