@@ -53,7 +53,7 @@ BEGIN_MESSAGE_MAP(CClienteDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_STARTSTOP, &CClienteDlg::OnBnClickedStartstop)
 	ON_WM_TIMER()
-	ON_WM_TIMER()
+	ON_BN_CLICKED(IDC_CLEAR, &CClienteDlg::OnBnClickedClear)
 END_MESSAGE_MAP()
 
 
@@ -206,11 +206,11 @@ void CClienteDlg::ProcesarRespuestaLuces()
 
 		// Aquí puedes cambiar colores o textos de tus controles IDC_FRENO, IDC_IZQ, etc.
 		// Ejemplo:
-		m_freno.SetWindowTextW(freno ? L"ON" : L"OFF");
-		m_izq.SetWindowTextW(izq_del ? L"ON" : L"OFF");
+		m_freno.SetWindowText(freno ? _T("ON") : _T("OFF"));
+		m_izq.SetWindowText(izq_del ? _T("ON") : _T("OFF"));
 
 		// Actualizar LED general de luces
-		m_ledluces.SetWindowTextW(L"OK"); // Mejor hacer cambiar color, pero como mínimo poner texto
+		m_ledluces.SetWindowText(_T("OK")); // Mejor hacer cambiar color, pero como mínimo poner texto
 	}
 	else
 	{
@@ -230,4 +230,9 @@ void CClienteDlg::EscribirLog(const CString& texto)
 	m_logs.GetWindowText(logsActuales);
 	logsActuales += timestamp;
 	m_logs.SetWindowText(logsActuales);
+}
+
+void CClienteDlg::OnBnClickedClear()
+{
+	CClienteDlg::OnOK();
 }
