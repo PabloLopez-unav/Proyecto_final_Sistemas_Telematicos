@@ -234,5 +234,5 @@ void CClienteDlg::EscribirLog(const CString& texto)
 
 void CClienteDlg::OnBnClickedClear()
 {
-	CClienteDlg::OnOK();
+	m_logs.SetWindowText(_T(""));;
 }
