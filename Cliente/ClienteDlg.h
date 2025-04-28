@@ -34,4 +34,32 @@ public:
 	CString m_ip;
 	int m_port;
 	CStatic m_ledluces;
+	int m_tiempo;
+	afx_msg void OnBnClickedStartstop();
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
+private:
+	CSocket misoc;
+	unsigned char buf[20];
+	unsigned char res[260];
+	short trans = 0;
+	bool pollingActivo = false;
+	CString ip = "127.0.0.1"; // O la IP real de tu servidor de luces
+	int port = 5020;
+
+	void PollingLuces();
+	void ProcesarRespuestaLuces();
+	void EscribirLog(const CString& texto);
+public:
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	CString m_ipacc;
+	int m_portacc;
+	CStatic m_ledacc;
+	CStatic m_izq;
+	CStatic m_der;
+	CStatic m_freno;
+	CString m_ipmot;
+	int m_portmot;
+	CStatic m_velocidad;
+	CStatic m_revoluciones;
+	CEdit m_logs;
 };
