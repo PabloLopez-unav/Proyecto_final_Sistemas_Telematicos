@@ -7,7 +7,6 @@
 #define IDR_MAINFRAME                   128
 #define IDC_START                       1000
 #define IDC_PORT                        1001
-#define IDC_EDIT2                       1002
 #define IDC_FRENO_ADDRES                1002
 #define IDC_LED_1                       1004
 #define IDC_LED_ARR_IZQ                 1005
