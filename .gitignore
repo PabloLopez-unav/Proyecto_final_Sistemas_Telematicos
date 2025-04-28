@@ -1,4 +1,4 @@
-# Archivos generados por compilación
+# Build results
 **/Debug/
 **/Release/
 *.obj
@@ -6,7 +6,7 @@
 *.pdb
 *.idb
 
-# Archivos específicos de Visual Studio
+# Visual Studio files
 *.suo
 *.user
 *.vcxproj.user
@@ -18,11 +18,11 @@
 *.VC.db
 *.ipch
 
-# Archivos temporales o de backup
+# VS config folders
+.vs/
+.vscode/
+
+# Temp/backup files
 *.bak
 *.tmp
 ~$*
-
-# Directorios comunes a ignorar
-/.vs/
-.vscode/
