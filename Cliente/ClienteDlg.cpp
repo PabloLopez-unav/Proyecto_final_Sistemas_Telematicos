@@ -15,10 +15,18 @@
 
 // CClienteDlg dialog
 
+CSocket misoc;
+unsigned char buf[20];
+unsigned char res[260];
+CString ip = "127.0.0.1"; // Cambiar por IP del servidor si es otra
+int port = 5020;           // Puerto donde escucha el servidor de luces
+short trans = 0;
 
 
 CClienteDlg::CClienteDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_CLIENTE_DIALOG, pParent)
+	, m_ip(_T(""))
+	, m_port(0)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -26,6 +34,9 @@ CClienteDlg::CClienteDlg(CWnd* pParent /*=nullptr*/)
 void CClienteDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
+	DDX_Control(pDX, IDC_IP, m_ip);
+	DDX_Text(pDX, IDC_PORT, m_port);
+	DDX_Control(pDX, IDC_LEDLUCES, m_ledluces);
 }
 
 BEGIN_MESSAGE_MAP(CClienteDlg, CDialogEx)
