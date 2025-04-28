@@ -68,14 +68,17 @@ BOOL CServidorLucesDlg::OnInitDialog()
 
 	// TODO: Add extra initialization here
 
+
 	misoc = new CMySocket();
-	bool ret = misoc->Create(3510, SOCK_STREAM);
+	bool ret = misoc->Create(5020, SOCK_STREAM);
 	if (!ret) MessageBox("Error al crear el socket");
 	ret = misoc->Listen();
 	if (!ret) MessageBox("Error al quedar a la escucha...");
 
 	CBrush m_brush;
-	m_testo_dir_freno_nada.Format(_T("Freno. Dir %d"), dir_led_1);
+	m_testo_dir_freno_nada.Format(_T("Freno: addr = 500"));
+	m_port.Format(_T("5020"));
+
 
 	UpdateData(0);
 
@@ -124,10 +127,8 @@ HCURSOR CServidorLucesDlg::OnQueryDragIcon()
 void CMySocket::OnAccept(int err)
 {
 	CString cs, cs1;
-	UINT port;
 	CSocket client;
 	Accept(client);  // MySocket acepta el Maestro
-	//client.GetSockName(cs, port);
 	int id, dir, value;
 	unsigned char buf[20];
 	while (true) {
@@ -193,16 +194,31 @@ void CMySocket::OnAccept(int err)
 					CDC* pdc = pDlg->m_led_deb_izq.GetDC();
 					CRect r;
 					pDlg->m_led_deb_izq.GetClientRect(r);
-					CBrush red(RGB(255, 0, 0));
+					CBrush orange(RGB(255, 165, 0));
 					CBrush grey(RGB(128, 128, 128));
 					if (buf[11] == 1 && enc_led_deb_izq == 0) {
 						enc_led_deb_izq = 1;
-						pdc->FillRect(r, &red);
+						pdc->FillRect(r, &orange);
 					}
 					else if (buf[11] == 0 && enc_led_deb_izq == 1) {
-						enc_led_deb
-
-
+						enc_led_deb_izq = 0;
+						pdc->FillRect(r, &grey);
+					}
+				}
+				else if (dir == 504) {
+					CDC* pdc = pDlg->m_led_deb_der.GetDC();
+					CRect r;
+					pDlg->m_led_deb_der.GetClientRect(r);
+					CBrush orange(RGB(255, 165, 0));
+					CBrush grey(RGB(128, 128, 128));
+					if (buf[11] == 1 && enc_led_deb_der == 0) {
+						enc_led_deb_der = 1;
+						pdc->FillRect(r, &orange);
+					}
+					else if (buf[11] == 0 && enc_led_deb_der == 1) {
+						enc_led_deb_der = 0;
+						pdc->FillRect(r, &grey);
+					}
 				}
 				client.Send(buf, 20);
 			}
