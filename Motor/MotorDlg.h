@@ -42,4 +42,8 @@ public:
 	int dir_rpm;
 	int dir_temperatura;
 	afx_msg void OnBnClickedStart();
+	CSliderCtrl m_slider_rpm_ctrl;
+	int m_slider_rpm_val;
+	CSliderCtrl m_slider_temp_ctrl;
+	int m_slider_temp_val;
 };

@@ -26,6 +26,8 @@ bool start = 0;
 CMotorDlg::CMotorDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_MOTOR_DIALOG, pParent)
 	, m_port(_T(""))
+	, m_slider_rpm_val(0)
+	, m_slider_temp_val(0)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 	dir_rpm = 0;
@@ -36,6 +38,10 @@ void CMotorDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Text(pDX, IDC_PORT, m_port);
+	DDX_Control(pDX, IDC_SLIDER_RPM, m_slider_rpm_ctrl);
+	DDX_Slider(pDX, IDC_SLIDER_RPM, m_slider_rpm_val);
+	DDX_Control(pDX, IDC_SLIDER_TEMP, m_slider_temp_ctrl);
+	DDX_Slider(pDX, IDC_SLIDER_TEMP, m_slider_temp_val);
 }
 
 BEGIN_MESSAGE_MAP(CMotorDlg, CDialogEx)
@@ -63,6 +69,8 @@ BOOL CMotorDlg::OnInitDialog()
 	if (!ret) MessageBox("Error al crear el socket");
 	ret = misoc->Listen();
 	if (!ret) MessageBox("Error al quedar a la escucha...");
+	m_slider_temp_ctrl.SetRange(0, 300);
+	m_slider_rpm_ctrl.SetRange(0, 7000);
 
 	CBrush m_brush;
 	m_port.Format(_T("5022"));
@@ -133,13 +141,12 @@ void CMySocket::OnAccept(int err)
 				pDlg->UpdateData();
 
 				if (dir == 400) {
-					buf[11] = pDlg->m_boton_freno;
+					buf[10] = pDlg->m_slider_temp_val / 256;
+					buf[11] = pDlg->m_slider_temp_val % 256;
 				}
 				else if (dir == 401) {
-					buf[11] = pDlg->m_boton_int_izq;
-				}
-				else if (dir == 402) {
-					buf[11] = pDlg->m_boton_int_der;
+					buf[10] = pDlg->m_slider_rpm_val / 256;
+					buf[11] = pDlg->m_slider_rpm_val % 256;
 				}
 				else if (dir == 570) {
 					buf[11] = start;
@@ -149,8 +156,6 @@ void CMySocket::OnAccept(int err)
 		}
 	}
 	client.Close();
-
-
 }
 
 void CMotorDlg::OnBnClickedStart()
