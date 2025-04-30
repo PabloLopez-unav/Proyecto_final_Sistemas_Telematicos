@@ -220,7 +220,7 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 
 			PaintSpeedometer();
 
-			pos_rojo_2;
+			pos_rojo_2 = pintar_revoluciones;
 
 			Paint_REVO_Speedometer();
 
@@ -921,6 +921,7 @@ void CClienteDlg::PaintSpeedometer() {
 
 }
 
+
 void CClienteDlg::Paint_REVO_Speedometer() {
 
 	CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
@@ -957,7 +958,7 @@ void CClienteDlg::Paint_REVO_Speedometer() {
 	const double maxAngle = 3.14159 * 0.99; // ~175° in radians
 
 	// Map pos_rojo (0-300) to the restricted angle range
-	double angle = maxAngle + (pos_rojo_2 * (maxAngle - minAngle) / 300.0);
+	double angle = maxAngle + (pos_rojo_2 * (maxAngle - minAngle) / 7000.0);
 
 	if (angle < 2) {
 		angle = angle++;
