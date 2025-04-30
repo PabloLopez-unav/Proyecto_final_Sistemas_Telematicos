@@ -29,6 +29,9 @@ int pintar_revoluciones = 0;
 int pos_rojo = 0;
 int pos_rojo_2 = 0;
 
+
+bool cont = 0;
+bool cont1 = 0, cont2 = 0;
 // CClienteDlg dialog
 
 CClienteDlg::CClienteDlg(CWnd* pParent /*=nullptr*/)
@@ -140,11 +143,16 @@ void CClienteDlg::OnBnClickedStartstop()
 	{
 		SetTimer(1, m_tiempo, NULL); // m_tiempo viene del cuadro de edición "Tiempo (ms)"
 		EscribirLog("Polling iniciado");
+
 	}
 	else
 	{
 		KillTimer(1);
 		EscribirLog("Polling detenido");
+
+		cont = 0;
+		cont1 = 0;
+		cont2 = 0;
 	}
 }
 
@@ -164,7 +172,10 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			CBrush red(RGB(255, 0, 0));
 			pdc->FillRect(r, &red);
 
-
+			if (cont == 1) {
+				EscribirLog("Luces XxNOxX");
+				cont = 0;
+			}
 		}
 		else {
 
@@ -176,6 +187,11 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			CBrush green(RGB(0, 255, 0));
 			pdc->FillRect(r, &green);
 
+
+			if (cont == 0) {
+				EscribirLog("Luces OK");
+				cont = 1;
+			}
 		}
 
 		if (StartAccionador() == 0) {
@@ -186,6 +202,11 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			pDlg->m_ledacc.GetClientRect(r);
 			CBrush red(RGB(255, 0, 0));
 			pdc->FillRect(r, &red);
+
+			if (cont1 == 1) {
+				EscribirLog("Accionador XxNOxX");
+				cont1 = 0;
+			}
 		}
 		else {
 			CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
@@ -194,10 +215,12 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			pDlg->m_ledacc.GetClientRect(r);
 			CBrush green(RGB(0, 255, 0));
 			pdc->FillRect(r, &green);
+
+			if (cont1 == 0) {
+				EscribirLog("Accionador OK");
+				cont1 = 1;
+			}
 		}
-		// faltan los logs, que nos es más que meterle como texto a la funcion 
-		// si ha cambiado la variable encendido, ence..2 , ence..3 y dicho cambio,
-		// yo lo hago en 5 mins, pero ahora estoy cansando la verdad
 
 		if (StartAccionador() == true && StartLuces() == true)
 		{
@@ -215,6 +238,10 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			CBrush green(RGB(0, 255, 0));
 			pdc->FillRect(r, &green);
 
+			if (cont2 == 0) {
+				EscribirLog("Motor OK");
+				cont2 = 1;
+			}
 
 			pos_rojo = PollingMotor();
 
@@ -223,7 +250,6 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			pos_rojo_2 = pintar_revoluciones;
 
 			Paint_REVO_Speedometer();
-
 		}
 		else {
 			CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
@@ -233,8 +259,12 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			pDlg->m_led_mot.GetClientRect(r);
 			CBrush red(RGB(255, 0, 0));
 			pdc->FillRect(r, &red);
-		}
 
+			if (cont2 == 1) {
+				EscribirLog("Motor XxNOxX");
+				cont2 = 0;
+			}
+		}
 
 	}
 
@@ -465,6 +495,24 @@ void CClienteDlg::PollingLuces_Freno()
 
 	// Cierro el socket
 	misoc.Close();
+
+
+	if (encendido == 1) {
+		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+		CDC* pdc = pDlg->m_freno.GetDC();
+		CRect r;
+		pDlg->m_freno.GetClientRect(r);
+		CBrush red(RGB(255, 0, 0));
+		pdc->FillRect(r, &red);
+	}
+	else {
+		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+		CDC* pdc = pDlg->m_freno.GetDC();
+		CRect r;
+		pDlg->m_freno.GetClientRect(r);
+		CBrush grey(RGB(192, 192, 192));
+		pdc->FillRect(r, &grey);
+	}
 }
 
 void CClienteDlg::PollingLuces_Int_Izq() {
@@ -838,23 +886,26 @@ void CClienteDlg::EscribirLog(const CString& texto)
 {
 	COleDateTime now = COleDateTime::GetCurrentTime();
 	CString timestamp;
-	timestamp.Format("[%02d:%02d:%02d] %s\r\n",
-		now.GetHour(), now.GetMinute(), now.GetSecond(),
-		texto);
+	timestamp.Format("[%02d:%02d:%02d] %s \r\n", now.GetHour(), now.GetMinute(), now.GetSecond(),texto);
 
 	CString logsActuales;
 	m_logs.GetWindowText(logsActuales);
 	logsActuales += timestamp;
 	m_logs.SetWindowText(logsActuales);
+	m_logs.LineScroll(m_logs.GetLineCount());
+
 }
 
 void CClienteDlg::OnBnClickedClear()
 {
-	m_logs.SetWindowText(_T(""));;
+	m_logs.SetWindowText(_T(""));
+
 }
 
-void CClienteDlg::PaintSpeedometer() {
 
+
+void CClienteDlg::PaintSpeedometer()
+{
 	CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
 
 	CDC* pdc = pDlg->m_velocidad.GetDC();
@@ -895,7 +946,7 @@ void CClienteDlg::PaintSpeedometer() {
 		angle = angle++;
 	}
 	else {
-	
+
 	}
 
 	// Draw the needle (red line)
@@ -918,9 +969,7 @@ void CClienteDlg::PaintSpeedometer() {
 	// Clean up
 	pdc->SelectObject(pOldPen);
 	ReleaseDC(pdc);
-
 }
-
 
 void CClienteDlg::Paint_REVO_Speedometer() {
 
