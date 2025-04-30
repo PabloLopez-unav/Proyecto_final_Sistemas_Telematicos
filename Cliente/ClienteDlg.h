@@ -48,12 +48,16 @@ private:
 
 	bool StartLuces();
 	bool StartAccionador();
+	bool StartMotor();
 
 
 	void PollingLuces_Freno();
 	void PollingLuces_Int_Der();
 	void PollingLuces_Int_Izq();
+	int PollingMotor();
 
+	void PaintSpeedometer();
+	void Paint_REVO_Speedometer();
 
 
 	void ProcesarRespuestaLuces();
@@ -71,4 +75,6 @@ public:
 	CStatic m_revoluciones;
 	CEdit m_logs;
 	afx_msg void OnBnClickedClear();
+	CStatic m_led_mot;
 };
+

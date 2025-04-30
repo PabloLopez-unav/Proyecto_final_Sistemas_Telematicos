@@ -17,20 +17,29 @@ bool encendido = 0;
 bool encendido2 = 0;
 bool encendido3 = 0;
 
+int revoluciones = 0;
+int temperatura = 0;
+
 bool start = 0;
 bool start2 = 0;
+bool start3 = 0;
+
+int pintar_temp = 0;
+int pintar_revoluciones = 0;
+int pos_rojo = 0;
+int pos_rojo_2 = 0;
 
 // CClienteDlg dialog
 
 CClienteDlg::CClienteDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_CLIENTE_DIALOG, pParent)
-	, m_ip(_T(""))
-	, m_port(0)
-	, m_tiempo(0)
-	, m_ipacc(_T(""))
-	, m_portacc(0)
-	, m_ipmot(_T(""))
-	, m_portmot(0)
+	, m_ip(_T("127.0.0.1"))
+	, m_port(5020)
+	, m_tiempo(100)
+	, m_ipacc(_T("127.0.0.1"))
+	, m_portacc(5021)
+	, m_ipmot(_T("127.0.0.1"))
+	, m_portmot(5022)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -53,6 +62,7 @@ void CClienteDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_VELOCIDAD, m_velocidad);
 	DDX_Control(pDX, IDC_REVOLUCIONES, m_revoluciones);
 	DDX_Control(pDX, IDC_LOGS, m_logs);
+	DDX_Control(pDX, IDC_LED_MOT, m_led_mot);
 }
 
 BEGIN_MESSAGE_MAP(CClienteDlg, CDialogEx)
@@ -196,6 +206,36 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			PollingLuces_Int_Izq();
 		}
 
+		if (StartMotor() == true)
+		{
+			CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+			CDC* pdc = pDlg->m_led_mot.GetDC();
+			CRect r;
+			pDlg->m_led_mot.GetClientRect(r);
+			CBrush green(RGB(0, 255, 0));
+			pdc->FillRect(r, &green);
+
+
+			pos_rojo = PollingMotor();
+
+			PaintSpeedometer();
+
+			pos_rojo_2;
+
+			Paint_REVO_Speedometer();
+
+		}
+		else {
+			CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+
+			CDC* pdc = pDlg->m_led_mot.GetDC();
+			CRect r;
+			pDlg->m_led_mot.GetClientRect(r);
+			CBrush red(RGB(255, 0, 0));
+			pdc->FillRect(r, &red);
+		}
+
+
 	}
 
 	CDialogEx::OnTimer(nIDEvent);
@@ -249,7 +289,7 @@ bool CClienteDlg::StartLuces() {
 
 }
 
-bool CClienteDlg::StartAccionador(){
+bool CClienteDlg::StartAccionador() {
 	UpdateData();
 	// Intento crear el Socket con el Slave
 	CSocket misoc;
@@ -295,6 +335,55 @@ bool CClienteDlg::StartAccionador(){
 
 	return start2;
 }
+
+bool CClienteDlg::StartMotor() {
+
+	UpdateData();
+	// Intento crear el Socket con el Slave
+	CSocket misoc;
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_portmot)) {
+		misoc.Close();
+		MessageBox(_T("Fallo en creacion Socket motor.."));
+		start = 0;
+		return start3;
+	}
+
+	//Mando datos
+	encendido3 = 1;
+	unsigned char buf[20];
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 06;
+	buf[8] = 570 / 256;
+	buf[9] = 570 % 256;
+	buf[10] = start3 / 256;
+	buf[11] = start3 % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	unsigned char resp[20];
+	misoc.Receive(resp, 20);
+	short TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox(_T("Respuesta no recibida.."));
+	}
+
+	// Cierro el socket
+	misoc.Close();
+
+	// leo encendido de respuesta, encendido es un booleano
+	start3 = resp[10] * 256 + resp[11];
+
+
+	return start3;
+}
+
 
 //-------------------------------------------------------------------------------
 void CClienteDlg::PollingLuces_Freno()
@@ -611,13 +700,110 @@ void CClienteDlg::PollingLuces_Int_Der() {
 	// Cierro el socket
 	misoc.Close();
 }
+
+int CClienteDlg::PollingMotor() {
+
+	UpdateData();
+	// Intento crear el Socket con el Slave
+	CSocket misoc;
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_portmot)) {
+		misoc.Close();
+		MessageBox("Fallo en creacion..");
+		return temperatura;
+	}
+
+	//Mando datos
+	temperatura = 0;
+	unsigned char buf[20];
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 0x04;
+	buf[8] = 400 / 256;
+	buf[9] = 400 % 256;
+	buf[10] = 0 / 256;
+	buf[11] = 0 % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	unsigned char resp[20];
+	misoc.Receive(resp, 20);
+
+	temperatura = resp[10] * 256;
+	temperatura += resp[11];
+	short TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox("Respuesta no recibida..");
+	}
+	else if (resp[10] == 10 && resp[11] == 10)
+		MessageBox("Sensor apagado..");
+	else {
+		pintar_temp = temperatura;
+		UpdateData(0);
+	}
+
+	// Cierro el socket
+	misoc.Close();
+
+	UpdateData();
+	// Intento crear el Socket con el Slave
+	if (!misoc.Create() || !misoc.Connect(m_ip, m_portmot)) {
+		misoc.Close();
+		MessageBox("Fallo en creacion..");
+		return temperatura;
+	}
+
+	//Mando datos
+	revoluciones = 0;
+	buf[0] = Trans / 256;
+	buf[1] = Trans++ % 256;
+	buf[2] = 0;
+	buf[3] = 0;
+	buf[4] = 0;
+	buf[5] = 6;
+	buf[6] = 0x15;
+	buf[7] = 0x04;
+	buf[8] = 401 / 256;
+	buf[9] = 401 % 256;
+	buf[10] = 0 / 256;
+	buf[11] = 0 % 256;
+	UpdateData(0);
+	misoc.Send(buf, 20);
+
+	// Verifico que me responde
+	misoc.Receive(resp, 20);
+
+	revoluciones = resp[10] * 256;
+	revoluciones += resp[11];
+	TransResp = resp[0] * 256 + resp[1] + 1;
+	if (TransResp != Trans) {
+		MessageBox("Respuesta no recibida..");
+	}
+	else if (resp[10] == 10 && resp[11] == 10)
+		MessageBox("Sensor apagado..");
+	else {
+		pintar_revoluciones = revoluciones;
+		UpdateData(0);
+	}
+
+	// Cierro el socket
+	misoc.Close();
+
+	return pintar_temp;
+}
+
 //-------------------------------------------------------------------------------
 
 
 
 
 
-
+// AUN NO LO USO
 void CClienteDlg::ProcesarRespuestaLuces()
 {
 	if (res[7] == 0x03)
@@ -665,4 +851,140 @@ void CClienteDlg::EscribirLog(const CString& texto)
 void CClienteDlg::OnBnClickedClear()
 {
 	m_logs.SetWindowText(_T(""));;
+}
+
+void CClienteDlg::PaintSpeedometer() {
+
+	CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+
+	CDC* pdc = pDlg->m_velocidad.GetDC();
+
+	// Get the dimensions of the control
+	CRect rect;
+	pDlg->m_velocidad.GetClientRect(rect);
+
+	// Clear background with white
+	CBrush brushBackground(RGB(255, 255, 255));
+	pdc->FillRect(rect, &brushBackground);
+
+	// Draw the semicircle (speedometer background)
+	CPen penBlack(PS_SOLID, 1, RGB(0, 0, 0));
+	CPen* pOldPen = pdc->SelectObject(&penBlack);
+
+	// Calculate the center point and radius
+	int centerX = rect.Width() / 2;
+	int centerY = rect.bottom;
+	int radius = min(rect.Width() / 2, rect.Height());
+
+	// Draw the semicircle (arc)
+	pdc->Arc(centerX - radius, centerY - radius,
+		centerX + radius, centerY + radius,
+		centerX + radius, centerY,
+		centerX - radius, centerY);
+
+
+	// Calculate the angle for the needle based on pos_rojo
+	// 0 degrees is at 3 o'clock, we need to go from 180 to 0 degrees
+	const double minAngle = 3.14159 * 0.05; // ~5° in radians
+	const double maxAngle = 3.14159 * 0.99; // ~175° in radians
+
+	// Map pos_rojo (0-300) to the restricted angle range
+	double angle = maxAngle + (pos_rojo * (maxAngle - minAngle) / 300.0);
+
+	if (angle < 2) {
+		angle = angle++;
+	}
+	else {
+	
+	}
+
+	// Draw the needle (red line)
+	CPen penRed(PS_SOLID, 2, RGB(255, 0, 0));
+	pdc->SelectObject(&penRed);
+
+	// Calculate end point of needle
+	int needleEndX = centerX + static_cast<int>(cos(angle) * (radius - 10));
+	int needleEndY = centerY + static_cast<int>(sin(angle) * (radius - 10));
+
+	if (needleEndY > 55)
+	{
+		needleEndY = needleEndY - 3;
+	}
+
+	// Draw the needle
+	pdc->MoveTo(centerX, centerY);
+	pdc->LineTo(needleEndX, needleEndY);
+
+	// Clean up
+	pdc->SelectObject(pOldPen);
+	ReleaseDC(pdc);
+
+}
+
+void CClienteDlg::Paint_REVO_Speedometer() {
+
+	CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+
+	CDC* pdc = pDlg->m_revoluciones.GetDC();
+
+	// Get the dimensions of the control
+	CRect rect;
+	pDlg->m_revoluciones.GetClientRect(rect);
+
+	// Clear background with white
+	CBrush brushBackground(RGB(255, 255, 255));
+	pdc->FillRect(rect, &brushBackground);
+
+	// Draw the semicircle (speedometer background)
+	CPen penBlack(PS_SOLID, 1, RGB(0, 0, 0));
+	CPen* pOldPen = pdc->SelectObject(&penBlack);
+
+	// Calculate the center point and radius
+	int centerX = rect.Width() / 2;
+	int centerY = rect.bottom;
+	int radius = min(rect.Width() / 2, rect.Height());
+
+	// Draw the semicircle (arc)
+	pdc->Arc(centerX - radius, centerY - radius,
+		centerX + radius, centerY + radius,
+		centerX + radius, centerY,
+		centerX - radius, centerY);
+
+
+	// Calculate the angle for the needle based on pos_rojo
+	// 0 degrees is at 3 o'clock, we need to go from 180 to 0 degrees
+	const double minAngle = 3.14159 * 0.05; // ~5° in radians
+	const double maxAngle = 3.14159 * 0.99; // ~175° in radians
+
+	// Map pos_rojo (0-300) to the restricted angle range
+	double angle = maxAngle + (pos_rojo_2 * (maxAngle - minAngle) / 300.0);
+
+	if (angle < 2) {
+		angle = angle++;
+	}
+	else {
+
+	}
+
+	// Draw the needle (red line)
+	CPen penRed(PS_SOLID, 2, RGB(255, 0, 0));
+	pdc->SelectObject(&penRed);
+
+	// Calculate end point of needle
+	int needleEndX = centerX + static_cast<int>(cos(angle) * (radius - 10));
+	int needleEndY = centerY + static_cast<int>(sin(angle) * (radius - 10));
+
+	if (needleEndY > 55)
+	{
+		needleEndY = needleEndY - 3;
+	}
+
+	// Draw the needle
+	pdc->MoveTo(centerX, centerY);
+	pdc->LineTo(needleEndX, needleEndY);
+
+	// Clean up
+	pdc->SelectObject(pOldPen);
+	ReleaseDC(pdc);
+
 }
