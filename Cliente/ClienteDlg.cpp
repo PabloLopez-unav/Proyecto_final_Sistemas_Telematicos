@@ -13,9 +13,14 @@
 #endif
 
 short Trans = 10;
-bool encendido = 0;
-bool encendido2 = 0;
-bool encendido3 = 0;
+bool estadoFreno = false;
+bool encendido = false;
+bool intermitenteIzq = false;
+bool intermitenteDer = false;
+bool estadoParpadeoIzq = false;
+bool estadoParpadeoDer = false;
+UINT_PTR timerIzq = 3;
+UINT_PTR timerDer = 3;
 
 int revoluciones = 0;
 int temperatura = 0;
@@ -93,10 +98,22 @@ BOOL CClienteDlg::OnInitDialog()
 	SetWindowText(_T("Centralita"));
 
 
-	return TRUE;  // return TRUE  unless you set the focus to a control
+	int port = 8088;
+	CString cs;
+	cs.Format("WebServer iniciado en puerto %d", port);
+	EscribirLog(cs);
+
+	s_listen.Create(port, SOCK_STREAM);
+	s_listen.Listen();
+	// Enlazamos sockets con el diálogo
+	s_listen.m_pDlg = this;
+	s_conected.m_pDlg = this;
+	m_isConnected = false;
+
+	return TRUE;
 }
 
-// If you add a minimize button to your dialog, you will need the code below
+// If you add a minimize button to your dialog, you will need the code below3
 //  to draw the icon.  For MFC applications using the document/view model,
 //  this is automatically done for you by the framework.
 
@@ -157,7 +174,29 @@ void CClienteDlg::OnBnClickedStartstop()
 }
 
 
+void CALLBACK TimerParpadeoIzq(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+	estadoParpadeoIzq = !estadoParpadeoIzq;
+	CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+	if (pDlg && intermitenteIzq) {
+		CDC* pdc = pDlg->m_izq.GetDC();
+		CRect r;
+		pDlg->m_izq.GetClientRect(r);
+		CBrush brush(estadoParpadeoIzq ? RGB(255, 165, 0) : RGB(128, 128, 128));
+		pdc->FillRect(r, &brush);
+	}
+}
 
+void CALLBACK TimerParpadeoDer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+	estadoParpadeoDer = !estadoParpadeoDer;
+	CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+	if (pDlg && intermitenteDer) {
+		CDC* pdc = pDlg->m_der.GetDC();
+		CRect r;
+		pDlg->m_der.GetClientRect(r);
+		CBrush brush(estadoParpadeoDer ? RGB(255, 165, 0) : RGB(128, 128, 128));
+		pdc->FillRect(r, &brush);
+	}
+}
 
 void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 {
@@ -267,6 +306,51 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 		}
 
 	}
+	CString nuevoJson;
+	nuevoJson.Format("{\"rpm\": %d, \"temp\": %d, \"freno\": \"%s\", \"izq\": \"%s\", \"der\": \"%s\"}",
+		pintar_revoluciones, pintar_temp,
+		estadoFreno ? "ON" : "OFF",
+		intermitenteIzq ? "ON" : "OFF",
+		intermitenteDer ? "ON" : "OFF");
+
+	if (nuevoJson != lastJson) {
+		lastJson = nuevoJson;
+		lastUpdate = COleDateTime::GetCurrentTime();
+	}
+
+	// PARPADEO IZQUIERDO
+	if (intermitenteIzq) {
+		estadoParpadeoIzq = !estadoParpadeoIzq;
+		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+		CDC* pdc = pDlg->m_izq.GetDC();
+		CRect r; pDlg->m_izq.GetClientRect(r);
+		CBrush brush(estadoParpadeoIzq ? RGB(255, 165, 0) : RGB(128, 128, 128)); // Amarillo o gris
+		pdc->FillRect(r, &brush);
+	}
+	else {
+		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+		CDC* pdc = pDlg->m_izq.GetDC();
+		CRect r; pDlg->m_izq.GetClientRect(r);
+		CBrush brush(RGB(128, 128, 128));
+		pdc->FillRect(r, &brush);
+	}
+
+	// PARPADEO DERECHO
+	if (intermitenteDer) {
+		estadoParpadeoDer = !estadoParpadeoDer;
+		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+		CDC* pdc = pDlg->m_der.GetDC();
+		CRect r; pDlg->m_der.GetClientRect(r);
+		CBrush brush(estadoParpadeoDer ? RGB(255, 165, 0) : RGB(128, 128, 128)); // Amarillo o gris
+		pdc->FillRect(r, &brush);
+	}
+	else {
+		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+		CDC* pdc = pDlg->m_der.GetDC();
+		CRect r; pDlg->m_der.GetClientRect(r);
+		CBrush brush(RGB(128, 128, 128));
+		pdc->FillRect(r, &brush);
+	}
 
 	CDialogEx::OnTimer(nIDEvent);
 }
@@ -283,7 +367,6 @@ bool CClienteDlg::StartLuces() {
 	}
 
 	//Mando datos
-	encendido2 = 1;
 	unsigned char buf[20];
 	buf[0] = Trans / 256;
 	buf[1] = Trans++ % 256;
@@ -331,7 +414,6 @@ bool CClienteDlg::StartAccionador() {
 	}
 
 	//Mando datos
-	encendido2 = 1;
 	unsigned char buf[20];
 	buf[0] = Trans / 256;
 	buf[1] = Trans++ % 256;
@@ -379,7 +461,6 @@ bool CClienteDlg::StartMotor() {
 	}
 
 	//Mando datos
-	encendido3 = 1;
 	unsigned char buf[20];
 	buf[0] = Trans / 256;
 	buf[1] = Trans++ % 256;
@@ -439,8 +520,8 @@ void CClienteDlg::PollingLuces_Freno()
 	buf[7] = 06;
 	buf[8] = 400 / 256;
 	buf[9] = 400 % 256;
-	buf[10] = encendido / 256;
-	buf[11] = encendido % 256;
+	buf[10] = estadoFreno / 256;
+	buf[11] = estadoFreno % 256;
 	UpdateData(0);
 	misoc.Send(buf, 20);
 
@@ -455,9 +536,9 @@ void CClienteDlg::PollingLuces_Freno()
 	// Cierro el socket
 	misoc.Close();
 
-	// leo encendido de respuesta, encendido es un booleano
+	// leo estadoFreno de respuesta, estadoFreno es un booleano
 
-	encendido = resp[10] * 256 + resp[11];
+	estadoFreno = resp[10] * 256 + resp[11];
 
 
 	//-------------------------------------------------------------------------------
@@ -479,8 +560,8 @@ void CClienteDlg::PollingLuces_Freno()
 	buf[7] = 06;
 	buf[8] = 500 / 256;
 	buf[9] = 500 % 256;
-	buf[10] = encendido / 256;
-	buf[11] = encendido % 256;
+	buf[10] = estadoFreno / 256;
+	buf[11] = estadoFreno % 256;
 	UpdateData(0);
 	misoc.Send(buf, 20);
 
@@ -497,7 +578,7 @@ void CClienteDlg::PollingLuces_Freno()
 	misoc.Close();
 
 
-	if (encendido == 1) {
+	if (estadoFreno == 1) {
 		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
 		CDC* pdc = pDlg->m_freno.GetDC();
 		CRect r;
@@ -517,16 +598,14 @@ void CClienteDlg::PollingLuces_Freno()
 
 void CClienteDlg::PollingLuces_Int_Izq() {
 	UpdateData();
-	// Intento crear el Socket con el Slave
 	CSocket misoc;
 	if (!misoc.Create() || !misoc.Connect(m_ip, m_portacc)) {
 		misoc.Close();
-		MessageBox(_T("Fallo en creacion.."));
+		MessageBox(_T("Fallo en conexión para leer intermitente izq.."));
 		return;
 	}
 
-	//Mando datos
-	encendido2 = 1;
+	// Leer estado real del esclavo (registro 401)
 	unsigned char buf[20];
 	buf[0] = Trans / 256;
 	buf[1] = Trans++ % 256;
@@ -535,15 +614,14 @@ void CClienteDlg::PollingLuces_Int_Izq() {
 	buf[4] = 0;
 	buf[5] = 6;
 	buf[6] = 0x15;
-	buf[7] = 06;
+	buf[7] = 0x04;
 	buf[8] = 401 / 256;
 	buf[9] = 401 % 256;
-	buf[10] = encendido2 / 256;
-	buf[11] = encendido2 % 256;
+	buf[10] = 0;
+	buf[11] = 1;
 	UpdateData(0);
 	misoc.Send(buf, 20);
 
-	// Verifico que me responde
 	unsigned char resp[20];
 	misoc.Receive(resp, 20);
 	short TransResp = resp[0] * 256 + resp[1] + 1;
@@ -551,99 +629,62 @@ void CClienteDlg::PollingLuces_Int_Izq() {
 		MessageBox(_T("Respuesta no recibida.."));
 	}
 
-	// Cierro el socket
+	intermitenteIzq = (resp[10] * 256 + resp[11]) != 0;
+	KillTimer(timerIzq);
+	if (intermitenteIzq) {
+		SetTimer(timerIzq, 500, TimerParpadeoIzq);
+	}
+	else {
+		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+		if (pDlg) {
+			CDC* pdc = pDlg->m_izq.GetDC();
+			CRect r;
+			pDlg->m_izq.GetClientRect(r);
+			CBrush grey(RGB(128, 128, 128));
+			pdc->FillRect(r, &grey);
+		}
+	}
 	misoc.Close();
 
-	// leo encendido de respuesta, encendido es un booleano
-
-	encendido2 = resp[10] * 256 + resp[11];
-
-
-	//---------------------intermitente delante--------------------------------------
-	// No hace falta definir el mismo nombre otra vez que da error
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
+	// Propagar a luces delanteras (501) y traseras (503)
+	int addrs[] = { 501, 503 };
+	for (int i = 0; i < 2; ++i) {
+		int addr = addrs[i];
+		if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
+			misoc.Close();
+			MessageBox(_T("Fallo al conectar a luces para izq.."));
+			return;
+		}
+		buf[0] = Trans / 256;
+		buf[1] = Trans++ % 256;
+		buf[2] = 0;
+		buf[3] = 0;
+		buf[4] = 0;
+		buf[5] = 6;
+		buf[6] = 0x15;
+		buf[7] = 0x06;
+		buf[8] = addr / 256;
+		buf[9] = addr % 256;
+		buf[10] = intermitenteIzq ? 0 : 0;
+		buf[11] = intermitenteIzq ? 1 : 0;
+		misoc.Send(buf, 20);
+		misoc.Receive(resp, 20);
+		TransResp = resp[0] * 256 + resp[1] + 1;
+		if (TransResp != Trans) MessageBox(_T("Sin respuesta de luz izq.."));
 		misoc.Close();
-		MessageBox("Fallo en creacion..");
-		return;
 	}
-
-	//Mando datos
-	buf[0] = Trans / 256;
-	buf[1] = Trans++ % 256;
-	buf[2] = 0;
-	buf[3] = 0;
-	buf[4] = 0;
-	buf[5] = 6;
-	buf[6] = 0x15;
-	buf[7] = 06;
-	buf[8] = 501 / 256;
-	buf[9] = 501 % 256;
-	buf[10] = encendido2 / 256;
-	buf[11] = encendido2 % 256;
-	UpdateData(0);
-	misoc.Send(buf, 20);
-
-	// Verifico que me responde
-	// unsigned char resp[20];
-	misoc.Receive(resp, 20);
-	// short  // no la vuelvo a redefinir
-	TransResp = resp[0] * 256 + resp[1] + 1;
-	if (TransResp != Trans) {
-		MessageBox("Respuesta no recibida..");
-	}
-
-	// Cierro el socket
-	misoc.Close();
-
-	// intermitente detras
-
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
-		misoc.Close();
-		MessageBox("Fallo en creacion..");
-		return;
-	}
-
-	//Mando datos
-	buf[0] = Trans / 256;
-	buf[1] = Trans++ % 256;
-	buf[2] = 0;
-	buf[3] = 0;
-	buf[4] = 0;
-	buf[5] = 6;
-	buf[6] = 0x15;
-	buf[7] = 06;
-	buf[8] = 503 / 256;
-	buf[9] = 503 % 256;
-	buf[10] = encendido2 / 256;
-	buf[11] = encendido2 % 256;
-	UpdateData(0);
-	misoc.Send(buf, 20);
-
-	// Verifico que me responde
-	// unsigned char resp[20];
-	misoc.Receive(resp, 20);
-	// short  // no la vuelvo a redefinir
-	TransResp = resp[0] * 256 + resp[1] + 1;
-	if (TransResp != Trans) {
-		MessageBox("Respuesta no recibida..");
-	}
-
-	// Cierro el socket
-	misoc.Close();
 }
 
 void CClienteDlg::PollingLuces_Int_Der() {
 	UpdateData();
-	// Intento crear el Socket con el Slave
 	CSocket misoc;
 	if (!misoc.Create() || !misoc.Connect(m_ip, m_portacc)) {
 		misoc.Close();
-		MessageBox(_T("Fallo en creacion.."));
+		MessageBox(_T("Fallo en conexión para leer intermitente der.."));
 		return;
 	}
 
-	//Mando datos
-	encendido2 = 1;
+	// Leer estado real del esclavo (registro 402)
 	unsigned char buf[20];
 	buf[0] = Trans / 256;
 	buf[1] = Trans++ % 256;
@@ -652,15 +693,14 @@ void CClienteDlg::PollingLuces_Int_Der() {
 	buf[4] = 0;
 	buf[5] = 6;
 	buf[6] = 0x15;
-	buf[7] = 06;
+	buf[7] = 0x04;
 	buf[8] = 402 / 256;
 	buf[9] = 402 % 256;
-	buf[10] = encendido2 / 256;
-	buf[11] = encendido2 % 256;
+	buf[10] = 0;
+	buf[11] = 1;
 	UpdateData(0);
 	misoc.Send(buf, 20);
 
-	// Verifico que me responde
 	unsigned char resp[20];
 	misoc.Receive(resp, 20);
 	short TransResp = resp[0] * 256 + resp[1] + 1;
@@ -668,85 +708,50 @@ void CClienteDlg::PollingLuces_Int_Der() {
 		MessageBox(_T("Respuesta no recibida.."));
 	}
 
-	// Cierro el socket
+	intermitenteDer = (resp[10] * 256 + resp[11]) != 0;
+	KillTimer(timerDer);
+	if (intermitenteDer) {
+		SetTimer(timerDer, 500, TimerParpadeoDer);
+	}
+	else {
+		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
+		if (pDlg) {
+			CDC* pdc = pDlg->m_der.GetDC();
+			CRect r;
+			pDlg->m_der.GetClientRect(r);
+			CBrush grey(RGB(128, 128, 128));
+			pdc->FillRect(r, &grey);
+		}
+	}
 	misoc.Close();
 
-	// leo encendido de respuesta, encendido es un booleano
-
-	encendido2 = resp[10] * 256 + resp[11];
-
-
-	//---------------------intermitente delante--------------------------------------
-	// No hace falta definir el mismo nombre otra vez que da error
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
+	// Propagar a luces delanteras (502) y traseras (504)
+	int addrs[] = { 502, 504 };
+	for (int i = 0; i < 2; ++i) {
+		int addr = addrs[i];
+		if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
+			misoc.Close();
+			MessageBox(_T("Fallo al conectar a luces para der.."));
+			return;
+		}
+		buf[0] = Trans / 256;
+		buf[1] = Trans++ % 256;
+		buf[2] = 0;
+		buf[3] = 0;
+		buf[4] = 0;
+		buf[5] = 6;
+		buf[6] = 0x15;
+		buf[7] = 0x06;
+		buf[8] = addr / 256;
+		buf[9] = addr % 256;
+		buf[10] = intermitenteDer ? 0 : 0;
+		buf[11] = intermitenteDer ? 1 : 0;
+		misoc.Send(buf, 20);
+		misoc.Receive(resp, 20);
+		TransResp = resp[0] * 256 + resp[1] + 1;
+		if (TransResp != Trans) MessageBox(_T("Sin respuesta de luz der.."));
 		misoc.Close();
-		MessageBox("Fallo en creacion..");
-		return;
 	}
-
-	//Mando datos
-	buf[0] = Trans / 256;
-	buf[1] = Trans++ % 256;
-	buf[2] = 0;
-	buf[3] = 0;
-	buf[4] = 0;
-	buf[5] = 6;
-	buf[6] = 0x15;
-	buf[7] = 06;
-	buf[8] = 502 / 256;
-	buf[9] = 502 % 256;
-	buf[10] = encendido2 / 256;
-	buf[11] = encendido2 % 256;
-	UpdateData(0);
-	misoc.Send(buf, 20);
-
-	// Verifico que me responde
-	// unsigned char resp[20];
-	misoc.Receive(resp, 20);
-	// short  // no la vuelvo a redefinir
-	TransResp = resp[0] * 256 + resp[1] + 1;
-	if (TransResp != Trans) {
-		MessageBox("Respuesta no recibida..");
-	}
-
-	// Cierro el socket
-	misoc.Close();
-
-	// intermitente detras
-
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
-		misoc.Close();
-		MessageBox("Fallo en creacion..");
-		return;
-	}
-
-	//Mando datos
-	buf[0] = Trans / 256;
-	buf[1] = Trans++ % 256;
-	buf[2] = 0;
-	buf[3] = 0;
-	buf[4] = 0;
-	buf[5] = 6;
-	buf[6] = 0x15;
-	buf[7] = 06;
-	buf[8] = 504 / 256;
-	buf[9] = 504 % 256;
-	buf[10] = encendido2 / 256;
-	buf[11] = encendido2 % 256;
-	UpdateData(0);
-	misoc.Send(buf, 20);
-
-	// Verifico que me responde
-	// unsigned char resp[20];
-	misoc.Receive(resp, 20);
-	// short  // no la vuelvo a redefinir
-	TransResp = resp[0] * 256 + resp[1] + 1;
-	if (TransResp != Trans) {
-		MessageBox("Respuesta no recibida..");
-	}
-
-	// Cierro el socket
-	misoc.Close();
 }
 
 int CClienteDlg::PollingMotor() {
@@ -1037,4 +1042,131 @@ void CClienteDlg::Paint_REVO_Speedometer() {
 	pdc->SelectObject(pOldPen);
 	ReleaseDC(pdc);
 
+}
+
+//NUEVO
+void CClienteDlg::OnAccept()
+{
+	CString cs, strIP;
+	UINT port;
+
+	if (m_isConnected)
+		s_conected.Detach();
+
+	if (s_listen.Accept(s_conected)) {
+		s_conected.GetSockName(strIP, port);
+		cs.Format("Cliente conectado: IP=%s puerto=%d", strIP.GetBuffer(), port);
+		EscribirLog(cs);
+		m_isConnected = true;
+	}
+	else {
+		EscribirLog("Error: no se acepta más conexiones");
+	}
+}
+void CClienteDlg::OnReceive()
+{
+	char bufweb[10240];
+	int len = s_conected.Receive(bufweb, sizeof(bufweb) - 1);
+	if (len <= 0) {
+		s_conected.Close();
+		m_isConnected = false;
+		return;
+	}
+
+	bufweb[len] = 0;
+	CString msg = GetMsg(bufweb, len);
+	CString response;
+
+	if (msg.Find("/estado") != -1)
+	{
+		CString json = lastJson;
+
+		const char* header = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n";
+		s_conected.Send(header, strlen(header));
+		s_conected.Send(json.GetBuffer(), json.GetLength());
+	}
+	else
+	{
+		CString html = getPage();
+		const char* header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+		s_conected.Send(header, strlen(header));
+		s_conected.Send(html.GetBuffer(), html.GetLength());
+	}
+
+	s_conected.Close();
+	m_isConnected = false;
+}
+
+
+
+CString CClienteDlg::getPage()
+{
+	CString html;
+	html += "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Estado Vehículo</title>";
+	html += "<style>";
+	html += "body { font-family: Arial; background-color: #1e1e2f; color: white; text-align: center; }";
+	html += ".container { margin: 50px auto; width: 500px; padding: 20px; background-color: #2e2e3e; border-radius: 10px; box-shadow: 0px 0px 10px rgba(255,255,255,0.1); }";
+	html += ".title { font-size: 24px; margin-bottom: 20px; }";
+	html += "canvas { background-color: #1e1e2f; display: block; margin: 20px auto; }";
+	html += ".label { font-weight: bold; color: #ccc; margin-top: 10px; }";
+	html += ".value { font-size: 18px; margin-bottom: 10px; }";
+	html += "</style>";
+	html += "<script>";
+	html += "let rpm = 0, temp = 0;";
+	html += "function drawGauge(canvasId, value, max, label) {";
+	html += "  const canvas = document.getElementById(canvasId);";
+	html += "  const ctx = canvas.getContext('2d');";
+	html += "  const w = canvas.width, h = canvas.height, cx = w/2, cy = h;";
+	html += "  ctx.clearRect(0, 0, w, h);";
+	html += "  ctx.beginPath(); ctx.arc(cx, cy, cx-10, Math.PI, 2*Math.PI); ctx.lineWidth = 10; ctx.strokeStyle = '#444'; ctx.stroke();";
+	html += "  let angle = Math.PI + (value / max) * Math.PI;";
+	html += "  const x = cx + Math.cos(angle) * (cx - 20);";
+	html += "  const y = cy + Math.sin(angle) * (cx - 20);";
+	html += "  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.strokeStyle = 'red'; ctx.lineWidth = 4; ctx.stroke();";
+	html += "  ctx.fillStyle = 'white'; ctx.font = '16px Arial'; ctx.fillText(label + ': ' + value, cx - 40, cy - 10);";
+	html += "}";
+	html += "function actualizar() {";
+	html += "  fetch('/estado').then(res => res.json()).then(data => {";
+	html += "    rpm = data.rpm; temp = data.temp;";
+	html += "    document.getElementById('freno').textContent = data.freno;";
+	html += "    document.getElementById('izq').textContent = data.izq;";
+	html += "    document.getElementById('der').textContent = data.der;";
+	html += "    drawGauge('rpmCanvas', rpm, 7000, 'RPM');";
+	html += "    drawGauge('tempCanvas', temp, 300, 'TEMP');";
+	html += "    setTimeout(actualizar, 1000);";
+	html += "  }).catch(() => setTimeout(actualizar, 1000));";
+	html += "}";
+	html += "window.onload = actualizar;";
+	html += "</script>";
+	html += "</head><body><div class='container'><div class='title'>Estado del Sistema</div>";
+	html += "<canvas id='rpmCanvas' width='300' height='150'></canvas>";
+	html += "<canvas id='tempCanvas' width='300' height='150'></canvas>";
+	html += "<div class='label'>Freno:</div><div id='freno' class='value'>...</div>";
+	html += "<div class='label'>Intermitente Izq:</div><div id='izq' class='value'>...</div>";
+	html += "<div class='label'>Intermitente Der:</div><div id='der' class='value'>...</div>";
+	html += "</div></body></html>";
+	return html;
+}
+
+
+
+
+
+
+
+CString CClienteDlg::GetMsg(char* buf, int n)
+{
+	CString cs(buf), str;
+	int pos = cs.Find(" HTTP");
+	if (pos != -1) {
+		str = cs.Left(pos);
+	}
+	return str;
+}
+
+void CClienteDlg::OnClose()
+{
+	s_conected.Close();
+	m_isConnected = false;
+	EscribirLog(_T("Conexión cerrada por el cliente"));
 }
