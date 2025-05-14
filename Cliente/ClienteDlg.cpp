@@ -17,10 +17,10 @@ bool estadoFreno = false;
 bool encendido = false;
 bool intermitenteIzq = false;
 bool intermitenteDer = false;
-bool estadoParpadeoIzq = false;
 bool estadoParpadeoDer = false;
-UINT_PTR timerIzq = 3;
-UINT_PTR timerDer = 3;
+bool estadoParpadeoIzq = false;
+bool intermitenteIzq_activo = false;
+bool intermitenteDer_activo = false;
 
 int revoluciones = 0;
 int temperatura = 0;
@@ -103,12 +103,9 @@ BOOL CClienteDlg::OnInitDialog()
 	cs.Format("WebServer iniciado en puerto %d", port);
 	EscribirLog(cs);
 
-	s_listen.Create(port, SOCK_STREAM);
-	s_listen.Listen();
 	// Enlazamos sockets con el diálogo
-	s_listen.m_pDlg = this;
-	s_conected.m_pDlg = this;
 	m_isConnected = false;
+	AfxBeginThread(ThreadWebServer, this);
 
 	return TRUE;
 }
@@ -161,40 +158,92 @@ void CClienteDlg::OnBnClickedStartstop()
 		SetTimer(1, m_tiempo, NULL); // m_tiempo viene del cuadro de edición "Tiempo (ms)"
 		EscribirLog("Polling iniciado");
 
+		// --- Forzar reactivación de intermitentes en primera iteración ---
+		extern bool intermitenteIzq_activo;
+		extern bool intermitenteDer_activo;
+
+		intermitenteIzq_activo = false;
+		intermitenteDer_activo = false;
+
+		// IMPORTANTE: forzar que se detecte cambio en el polling
+		static bool previoIzq = false;
+		static bool previoDer = false;
+
+		previoIzq = false;
+		previoDer = false;
+
 	}
 	else
 	{
 		KillTimer(1);
+		KillTimer(2);
+		KillTimer(3);
+		pollingActivo = false;
 		EscribirLog("Polling detenido");
+
+		CString nuevoJson;
+		nuevoJson.Format("{\"rpm\": %d, \"temp\": %d, \"freno\": \"OFF\", \"izq\": \"OFF\", \"der\": \"OFF\"}",
+			pintar_revoluciones, pintar_temp);
+		lastJson = nuevoJson;
+		lastUpdate = COleDateTime::GetCurrentTime();
+
+
 
 		cont = 0;
 		cont1 = 0;
 		cont2 = 0;
-	}
-}
 
+		// Reset de luces visuales
+		CClientDC dcIzq(&m_izq), dcDer(&m_der), dcFreno(&m_freno);
+		CRect rectIzq, rectDer, rectFreno;
+		m_izq.GetClientRect(&rectIzq);
+		m_der.GetClientRect(&rectDer);
+		m_freno.GetClientRect(&rectFreno);
 
-void CALLBACK TimerParpadeoIzq(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-	estadoParpadeoIzq = !estadoParpadeoIzq;
-	CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
-	if (pDlg && intermitenteIzq) {
-		CDC* pdc = pDlg->m_izq.GetDC();
-		CRect r;
-		pDlg->m_izq.GetClientRect(r);
-		CBrush brush(estadoParpadeoIzq ? RGB(255, 165, 0) : RGB(128, 128, 128));
-		pdc->FillRect(r, &brush);
-	}
-}
+		dcIzq.FillSolidRect(&rectIzq, RGB(128, 128, 128));
+		dcDer.FillSolidRect(&rectDer, RGB(128, 128, 128));
+		dcFreno.FillSolidRect(&rectFreno, RGB(192, 192, 192));
 
-void CALLBACK TimerParpadeoDer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-	estadoParpadeoDer = !estadoParpadeoDer;
-	CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
-	if (pDlg && intermitenteDer) {
-		CDC* pdc = pDlg->m_der.GetDC();
-		CRect r;
-		pDlg->m_der.GetClientRect(r);
-		CBrush brush(estadoParpadeoDer ? RGB(255, 165, 0) : RGB(128, 128, 128));
-		pdc->FillRect(r, &brush);
+		// Reset de estados
+		estadoFreno = false;
+		intermitenteIzq = false;
+		intermitenteDer = false;
+		intermitenteIzq_activo = false;
+		intermitenteDer_activo = false;
+		estadoParpadeoIzq = false;
+		estadoParpadeoDer = false;
+
+		// Apagar luces del servidor (501, 502, 503, 504, 500)
+		int addrs[] = { 500, 501, 502, 503, 504 };
+		for (int i = 0; i < 5; ++i) {
+			CSocket sock;
+			if (!sock.Create()) {
+				MessageBox(_T("Error creación socket para apagar luces de Servidor_Luces"));
+				return;
+			}
+			if (!sock.Connect(m_ip, m_port)) {
+				MessageBox(_T("No conecta con el esclavo Servidor_Luces"));
+				sock.Close();
+				return;
+			}
+			unsigned char buf[20];
+			buf[0] = Trans / 256;
+			buf[1] = Trans++ % 256;
+			buf[2] = 0; buf[3] = 0;
+			buf[4] = 0; buf[5] = 6;
+			buf[6] = 0x15;
+			buf[7] = 0x06;
+			buf[8] = addrs[i] / 256;
+			buf[9] = addrs[i] % 256;
+			buf[10] = 0;  // apagar
+			buf[11] = 0;
+
+			sock.Send(buf, 12);
+			unsigned char resp[20];
+			sock.Receive(resp, 20);
+			sock.Close();
+		}
+		EscribirLog("Luces y estados apagados");
 	}
 }
 
@@ -261,7 +310,7 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			}
 		}
 
-		if (StartAccionador() == true && StartLuces() == true)
+		if (start2 == 1 && start == 1)
 		{
 			PollingLuces_Freno();
 			PollingLuces_Int_Der();
@@ -304,64 +353,123 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 				cont2 = 0;
 			}
 		}
+		CString nuevoJson;
+		nuevoJson.Format("{\"rpm\": %d, \"temp\": %d, \"freno\": \"%s\", \"izq\": \"%s\", \"der\": \"%s\"}",
+			pintar_revoluciones, pintar_temp,
+			estadoFreno ? "ON" : "OFF",
+			intermitenteIzq ? "ON" : "OFF",
+			intermitenteDer ? "ON" : "OFF");
 
+		if (nuevoJson != lastJson) {
+			lastJson = nuevoJson;
+			lastUpdate = COleDateTime::GetCurrentTime();
+		}
+
+		CDialogEx::OnTimer(nIDEvent);
+		return;
 	}
-	CString nuevoJson;
-	nuevoJson.Format("{\"rpm\": %d, \"temp\": %d, \"freno\": \"%s\", \"izq\": \"%s\", \"der\": \"%s\"}",
-		pintar_revoluciones, pintar_temp,
-		estadoFreno ? "ON" : "OFF",
-		intermitenteIzq ? "ON" : "OFF",
-		intermitenteDer ? "ON" : "OFF");
-
-	if (nuevoJson != lastJson) {
-		lastJson = nuevoJson;
-		lastUpdate = COleDateTime::GetCurrentTime();
-	}
-
-	// PARPADEO IZQUIERDO
-	if (intermitenteIzq) {
+	if (nIDEvent == 2) {
 		estadoParpadeoIzq = !estadoParpadeoIzq;
-		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
-		CDC* pdc = pDlg->m_izq.GetDC();
-		CRect r; pDlg->m_izq.GetClientRect(r);
-		CBrush brush(estadoParpadeoIzq ? RGB(255, 165, 0) : RGB(128, 128, 128)); // Amarillo o gris
-		pdc->FillRect(r, &brush);
-	}
-	else {
-		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
-		CDC* pdc = pDlg->m_izq.GetDC();
-		CRect r; pDlg->m_izq.GetClientRect(r);
-		CBrush brush(RGB(128, 128, 128));
-		pdc->FillRect(r, &brush);
-	}
 
-	// PARPADEO DERECHO
-	if (intermitenteDer) {
+		COLORREF color;
+		if (estadoParpadeoIzq)
+			color = RGB(255, 165, 0);  // Naranja
+		else
+			color = RGB(128, 128, 128);  // Gris
+
+		CClientDC dc(&m_izq);
+		CRect rect;
+		m_izq.GetClientRect(&rect);
+		dc.FillSolidRect(rect, color);
+
+		// --- Enviar parpadeo a servidor_luces (501 y 503) ---
+		int addrs[] = { 501, 503 };
+		for (int i = 0; i < 2; ++i) {
+			CSocket sockLuz;
+			if (!sockLuz.Create()) {
+				MessageBox(_T("Error al crear el socket a servidor_luces"));
+				return;
+			}
+			if (!sockLuz.Connect(m_ip, m_port)) {
+				MessageBox(_T("No conecta con el servidor_luces para parpadeo IZQ"));
+				return;
+			}
+			unsigned char buf[20];
+			buf[0] = Trans / 256;
+			buf[1] = Trans++ % 256;
+			buf[2] = 0; buf[3] = 0;
+			buf[4] = 0; buf[5] = 6;
+			buf[6] = 0x15;
+			buf[7] = 0x06; // Write Single Register
+			buf[8] = addrs[i] / 256;
+			buf[9] = addrs[i] % 256;
+			buf[10] = 0;
+			buf[11] = estadoParpadeoIzq ? 1 : 0;
+
+			sockLuz.Send(buf, 12);
+			unsigned char resp[20];
+			sockLuz.Receive(resp, 20);
+			sockLuz.Close();
+		}
+		return;
+	}
+	if (nIDEvent == 3) {
 		estadoParpadeoDer = !estadoParpadeoDer;
-		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
-		CDC* pdc = pDlg->m_der.GetDC();
-		CRect r; pDlg->m_der.GetClientRect(r);
-		CBrush brush(estadoParpadeoDer ? RGB(255, 165, 0) : RGB(128, 128, 128)); // Amarillo o gris
-		pdc->FillRect(r, &brush);
-	}
-	else {
-		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
-		CDC* pdc = pDlg->m_der.GetDC();
-		CRect r; pDlg->m_der.GetClientRect(r);
-		CBrush brush(RGB(128, 128, 128));
-		pdc->FillRect(r, &brush);
-	}
 
-	CDialogEx::OnTimer(nIDEvent);
+		COLORREF color;
+		if (estadoParpadeoDer)
+			color = RGB(255, 165, 0);  // Naranja
+		else
+			color = RGB(128, 128, 128);  // Gris
+
+		CClientDC dc(&m_der);
+		CRect rect;
+		m_der.GetClientRect(&rect);
+		dc.FillSolidRect(rect, color);
+
+		int addrs[] = { 502,504 };
+		for (int i = 0; i < 2; ++i) {
+			CSocket sockLuz;
+			if (!sockLuz.Create()) {
+				MessageBox(_T("Error al crear el socket a servidor_luces"));
+				return;
+			}
+			if (!sockLuz.Connect(m_ip, m_port)) {
+				MessageBox(_T("No conecta con el servidor_luces para parpadeo DER"));
+				return;
+			}
+			unsigned char buf[20];
+			buf[0] = Trans / 256;
+			buf[1] = Trans++ % 256;
+			buf[2] = 0; buf[3] = 0;
+			buf[4] = 0; buf[5] = 6;
+			buf[6] = 0x15;
+			buf[7] = 0x06; // Write Single Register
+			buf[8] = addrs[i] / 256;
+			buf[9] = addrs[i] % 256;
+			buf[10] = 0;
+			buf[11] = estadoParpadeoDer ? 1 : 0;
+
+			sockLuz.Send(buf, 12);
+			unsigned char resp[20];
+			sockLuz.Receive(resp, 20);
+			sockLuz.Close();
+		}
+		return;
+	}
 }
 
 bool CClienteDlg::StartLuces() {
 	UpdateData();
 	// Intento crear el Socket con el Slave
-	CSocket misoc;
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
-		misoc.Close();
-		MessageBox(_T("Fallo en creacion.."));
+	CSocket sockLuz;
+	if (!sockLuz.Create()) {
+		MessageBox(_T("Error al crear el socket a servidor_luces"));
+		return 0;
+	}
+	if (!sockLuz.Connect(m_ip, m_port)) {
+		MessageBox(_T("No conecta con el servidor_luces"));
+		sockLuz.Close();
 		start = 0;
 		return start;
 	}
@@ -381,35 +489,37 @@ bool CClienteDlg::StartLuces() {
 	buf[10] = start / 256;
 	buf[11] = start % 256;
 	UpdateData(0);
-	misoc.Send(buf, 20);
+	sockLuz.Send(buf, 20);
 
 	// Verifico que me responde
 	unsigned char resp[20];
-	misoc.Receive(resp, 20);
+	sockLuz.Receive(resp, 20);
 	short TransResp = resp[0] * 256 + resp[1] + 1;
 	if (TransResp != Trans) {
 		MessageBox(_T("Respuesta no recibida.."));
 	}
 
 	// Cierro el socket
-	misoc.Close();
+	sockLuz.Close();
 
 	// leo encendido de respuesta, encendido es un booleano
 	start = resp[10] * 256 + resp[11];
 
-
 	return start;
-
 }
 
 bool CClienteDlg::StartAccionador() {
 	UpdateData();
 	// Intento crear el Socket con el Slave
-	CSocket misoc;
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_portacc)) {
-		misoc.Close();
-		MessageBox(_T("Fallo en creacion.."));
-		start = 0;
+	CSocket sockAcc;
+	if (!sockAcc.Create()) {
+		MessageBox(_T("Error al crear el socket con el esclavo Accionamiento"));
+		return 0;
+	}
+	if (!sockAcc.Connect(m_ipacc, m_portacc)) {
+		MessageBox(_T("Fallo en conexion a esclavo Accionamientos"));
+		sockAcc.Close();
+		start2 = 0;
 		return start2;
 	}
 
@@ -428,22 +538,39 @@ bool CClienteDlg::StartAccionador() {
 	buf[10] = start2 / 256;
 	buf[11] = start2 % 256;
 	UpdateData(0);
-	misoc.Send(buf, 20);
+	sockAcc.Send(buf, 20);
 
 	// Verifico que me responde
 	unsigned char resp[20];
-	misoc.Receive(resp, 20);
+	sockAcc.Receive(resp, 20);
 	short TransResp = resp[0] * 256 + resp[1] + 1;
 	if (TransResp != Trans) {
 		MessageBox(_T("Respuesta no recibida.."));
 	}
 
 	// Cierro el socket
-	misoc.Close();
+	sockAcc.Close();
 
 	// leo encendido de respuesta, encendido es un booleano
 	start2 = resp[10] * 256 + resp[11];
 
+	if (start2 == 0) {
+		KillTimer(2);
+		KillTimer(3);
+
+		intermitenteIzq_activo = false;
+		intermitenteDer_activo = false;
+		intermitenteIzq = false;
+		intermitenteDer = false;
+
+		// Apagar visuales
+		CClientDC dcIzq(&m_izq), dcDer(&m_der);
+		CRect rectIzq, rectDer;
+		m_izq.GetClientRect(&rectIzq);
+		m_der.GetClientRect(&rectDer);
+		dcIzq.FillSolidRect(&rectIzq, RGB(128, 128, 128));
+		dcDer.FillSolidRect(&rectDer, RGB(128, 128, 128));
+	}
 
 	return start2;
 }
@@ -452,11 +579,15 @@ bool CClienteDlg::StartMotor() {
 
 	UpdateData();
 	// Intento crear el Socket con el Slave
-	CSocket misoc;
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_portmot)) {
-		misoc.Close();
-		MessageBox(_T("Fallo en creacion Socket motor.."));
-		start = 0;
+	CSocket sockMot;
+	if (!sockMot.Create()) {
+		MessageBox(_T("Error al crear socket con Motor"));
+		return 0;
+	}
+	if (!sockMot.Connect(m_ipmot, m_portmot)) {
+		MessageBox(_T("Fallo al conectar con Socket motor"));
+		sockMot.Close();
+		start3 = 0;
 		return start3;
 	}
 
@@ -475,18 +606,18 @@ bool CClienteDlg::StartMotor() {
 	buf[10] = start3 / 256;
 	buf[11] = start3 % 256;
 	UpdateData(0);
-	misoc.Send(buf, 20);
+	sockMot.Send(buf, 20);
 
 	// Verifico que me responde
 	unsigned char resp[20];
-	misoc.Receive(resp, 20);
+	sockMot.Receive(resp, 20);
 	short TransResp = resp[0] * 256 + resp[1] + 1;
 	if (TransResp != Trans) {
 		MessageBox(_T("Respuesta no recibida.."));
 	}
 
 	// Cierro el socket
-	misoc.Close();
+	sockMot.Close();
 
 	// leo encendido de respuesta, encendido es un booleano
 	start3 = resp[10] * 256 + resp[11];
@@ -501,13 +632,17 @@ void CClienteDlg::PollingLuces_Freno()
 {
 	UpdateData();
 	// Intento crear el Socket con el Slave
-	CSocket misoc;
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_portacc)) {
-		misoc.Close();
-		MessageBox("Fallo en creacion..");
+	CSocket sockAcc;
+	if (!sockAcc.Create()) {
+		MessageBox(_T("Error al crear el socket con Accionamientos para freno"));
 		return;
 	}
-
+	if (!sockAcc.Connect(m_ipacc, m_portacc)) {
+		MessageBox(_T("Fallo en creacion del socket a Accionamientos para el freno"));
+		sockAcc.Close();
+		return;
+	}
+	
 	//Mando datos
 	unsigned char buf[20];
 	buf[0] = Trans / 256;
@@ -523,29 +658,33 @@ void CClienteDlg::PollingLuces_Freno()
 	buf[10] = estadoFreno / 256;
 	buf[11] = estadoFreno % 256;
 	UpdateData(0);
-	misoc.Send(buf, 20);
+	sockAcc.Send(buf, 20);
 
 	// Verifico que me responde
 	unsigned char resp[20];
-	misoc.Receive(resp, 20);
+	sockAcc.Receive(resp, 20);
 	short TransResp = resp[0] * 256 + resp[1] + 1;
 	if (TransResp != Trans) {
 		MessageBox("Respuesta no recibida..");
 	}
 
 	// Cierro el socket
-	misoc.Close();
+	sockAcc.Close();
 
 	// leo estadoFreno de respuesta, estadoFreno es un booleano
 
 	estadoFreno = resp[10] * 256 + resp[11];
 
-
 	//-------------------------------------------------------------------------------
 	// No hace falta definir el mismo nombre otra vez que da error
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
-		misoc.Close();
-		MessageBox("Fallo en creacion..");
+	CSocket sockLuzFreno;
+	if (!sockLuzFreno.Create()) {
+		MessageBox(_T("Error al crear el socket con Accionamientos para freno"));
+		return;
+	}
+	if (!sockLuzFreno.Connect(m_ip, m_port)) {
+		MessageBox(_T("Fallo en creacion del socket a Accionamientos para el freno"));
+		sockLuzFreno.Close();
 		return;
 	}
 
@@ -563,11 +702,11 @@ void CClienteDlg::PollingLuces_Freno()
 	buf[10] = estadoFreno / 256;
 	buf[11] = estadoFreno % 256;
 	UpdateData(0);
-	misoc.Send(buf, 20);
+	sockLuzFreno.Send(buf, 20);
 
 	// Verifico que me responde
 	// unsigned char resp[20];
-	misoc.Receive(resp, 20);
+	sockLuzFreno.Receive(resp, 20);
 	// short  // no la vuelvo a redefinir
 	TransResp = resp[0] * 256 + resp[1] + 1;
 	if (TransResp != Trans) {
@@ -575,7 +714,7 @@ void CClienteDlg::PollingLuces_Freno()
 	}
 
 	// Cierro el socket
-	misoc.Close();
+	sockLuzFreno.Close();
 
 
 	if (estadoFreno == 1) {
@@ -596,91 +735,119 @@ void CClienteDlg::PollingLuces_Freno()
 	}
 }
 
-void CClienteDlg::PollingLuces_Int_Izq() {
+void CClienteDlg::PollingLuces_Int_Izq()
+{
 	UpdateData();
-	CSocket misoc;
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_portacc)) {
-		misoc.Close();
-		MessageBox(_T("Fallo en conexión para leer intermitente izq.."));
+
+	// Leer valor del accionador (registro 401)
+	CSocket sockAcc;
+	if (!sockAcc.Create()) {
+		MessageBox(_T("Error al crear el socket con Accionamientos para intermitente IZQ"));
 		return;
 	}
-
-	// Leer estado real del esclavo (registro 401)
+	if (!sockAcc.Connect(m_ipacc, m_portacc)) {
+		MessageBox(_T("Fallo en creacion del socket a Accionamientos para el intermitente IZQ"));
+		sockAcc.Close();
+		return;
+	}
+	
+	// Solicitud Modbus: leer un registro
 	unsigned char buf[20];
 	buf[0] = Trans / 256;
 	buf[1] = Trans++ % 256;
-	buf[2] = 0;
-	buf[3] = 0;
-	buf[4] = 0;
-	buf[5] = 6;
-	buf[6] = 0x15;
-	buf[7] = 0x04;
+	buf[2] = 0; buf[3] = 0;
+	buf[4] = 0; buf[5] = 6;
+	buf[6] = 0x15; // Unit ID
+	buf[7] = 0x04; // Function code: Read input register
 	buf[8] = 401 / 256;
 	buf[9] = 401 % 256;
 	buf[10] = 0;
 	buf[11] = 1;
-	UpdateData(0);
-	misoc.Send(buf, 20);
+
+	UpdateData(FALSE);
+	sockAcc.Send(buf, 12);
 
 	unsigned char resp[20];
-	misoc.Receive(resp, 20);
+	sockAcc.Receive(resp, 20);
+	sockAcc.Close();
+
 	short TransResp = resp[0] * 256 + resp[1] + 1;
 	if (TransResp != Trans) {
-		MessageBox(_T("Respuesta no recibida.."));
+		EscribirLog(_T("Respuesta inválida desde accionador IZQ"));
+		return;
 	}
 
-	intermitenteIzq = (resp[10] * 256 + resp[11]) != 0;
-	KillTimer(timerIzq);
-	if (intermitenteIzq) {
-		SetTimer(timerIzq, 500, TimerParpadeoIzq);
-	}
-	else {
-		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
-		if (pDlg) {
-			CDC* pdc = pDlg->m_izq.GetDC();
-			CRect r;
-			pDlg->m_izq.GetClientRect(r);
-			CBrush grey(RGB(128, 128, 128));
-			pdc->FillRect(r, &grey);
-		}
-	}
-	misoc.Close();
+	int valorLeido = resp[10] * 256 + resp[11];
+	bool activo = (valorLeido != 0);
+	intermitenteIzq = activo;  // Actualizar estado global
 
-	// Propagar a luces delanteras (501) y traseras (503)
-	int addrs[] = { 501, 503 };
-	for (int i = 0; i < 2; ++i) {
-		int addr = addrs[i];
-		if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
-			misoc.Close();
-			MessageBox(_T("Fallo al conectar a luces para izq.."));
-			return;
+	// Estado anterior estático
+	bool previoActivo = intermitenteIzq_activo;
+
+	if (start2 == 0) {
+		previoActivo = activo;
+		return;
+	}
+
+	// Detectar cambio de estado
+	if (activo != previoActivo) {
+		if (activo) {
+			SetTimer(2, 500, NULL);
+			intermitenteIzq_activo = true;
+			EscribirLog(_T("Intermitente IZQ ACTIVADO"));
 		}
-		buf[0] = Trans / 256;
-		buf[1] = Trans++ % 256;
-		buf[2] = 0;
-		buf[3] = 0;
-		buf[4] = 0;
-		buf[5] = 6;
-		buf[6] = 0x15;
-		buf[7] = 0x06;
-		buf[8] = addr / 256;
-		buf[9] = addr % 256;
-		buf[10] = intermitenteIzq ? 0 : 0;
-		buf[11] = intermitenteIzq ? 1 : 0;
-		misoc.Send(buf, 20);
-		misoc.Receive(resp, 20);
-		TransResp = resp[0] * 256 + resp[1] + 1;
-		if (TransResp != Trans) MessageBox(_T("Sin respuesta de luz izq.."));
-		misoc.Close();
+		else {
+			KillTimer(2);
+			intermitenteIzq_activo = false;
+			EscribirLog(_T("Intermitente IZQ APAGADO"));
+
+			// Apagar visual
+			CClientDC dc(&m_izq);
+			CRect rect;
+			m_izq.GetClientRect(&rect);
+			dc.FillSolidRect(&rect, RGB(128, 128, 128)); // gris
+
+			int addrs[] = { 501, 503 };  // luces izq del y tras
+			for (int i = 0; i < 2; ++i) {
+				CSocket sockLuz;
+				if (!sockLuz.Create()) continue;
+				if (!sockLuz.Connect(m_ip, m_port)) {
+					sockLuz.Close(); continue;
+				}
+				buf[0] = Trans / 256;
+				buf[1] = Trans++ % 256;
+				buf[2] = 0; buf[3] = 0;
+				buf[4] = 0; buf[5] = 6;
+				buf[6] = 0x15;
+				buf[7] = 0x06;
+				buf[8] = addrs[i] / 256;
+				buf[9] = addrs[i] % 256;
+				buf[10] = 0;
+				buf[11] = 0;  // apagar
+
+				sockLuz.Send(buf, 12);
+				sockLuz.Receive(resp, 20);
+				sockLuz.Close();
+			}
+
+		}
+
+		previoActivo = activo;
 	}
 }
 
+
+
 void CClienteDlg::PollingLuces_Int_Der() {
 	UpdateData();
-	CSocket misoc;
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_portacc)) {
-		misoc.Close();
-		MessageBox(_T("Fallo en conexión para leer intermitente der.."));
+	CSocket sockAcc;
+	if (!sockAcc.Create()) {
+		MessageBox(_T("Error al crear el socket con Accionamientos para intermitente DER"));
+		return;
+	}
+	if (!sockAcc.Connect(m_ipacc, m_portacc)) {
+		MessageBox(_T("Fallo en creacion del socket a Accionamientos para el intermitente DER"));
+		sockAcc.Close();
 		return;
 	}
 
@@ -699,72 +866,85 @@ void CClienteDlg::PollingLuces_Int_Der() {
 	buf[10] = 0;
 	buf[11] = 1;
 	UpdateData(0);
-	misoc.Send(buf, 20);
+	sockAcc.Send(buf, 20);
 
 	unsigned char resp[20];
-	misoc.Receive(resp, 20);
+	sockAcc.Receive(resp, 20);
 	short TransResp = resp[0] * 256 + resp[1] + 1;
 	if (TransResp != Trans) {
 		MessageBox(_T("Respuesta no recibida.."));
 	}
 
-	intermitenteDer = (resp[10] * 256 + resp[11]) != 0;
-	KillTimer(timerDer);
-	if (intermitenteDer) {
-		SetTimer(timerDer, 500, TimerParpadeoDer);
-	}
-	else {
-		CClienteDlg* pDlg = (CClienteDlg*)AfxGetMainWnd();
-		if (pDlg) {
-			CDC* pdc = pDlg->m_der.GetDC();
-			CRect r;
-			pDlg->m_der.GetClientRect(r);
-			CBrush grey(RGB(128, 128, 128));
-			pdc->FillRect(r, &grey);
-		}
-	}
-	misoc.Close();
+	int valorLeidoDer = resp[10] * 256 + resp[11];
+	bool activo = (valorLeidoDer != 0);
+	intermitenteDer = activo;
 
-	// Propagar a luces delanteras (502) y traseras (504)
-	int addrs[] = { 502, 504 };
-	for (int i = 0; i < 2; ++i) {
-		int addr = addrs[i];
-		if (!misoc.Create() || !misoc.Connect(m_ip, m_port)) {
-			misoc.Close();
-			MessageBox(_T("Fallo al conectar a luces para der.."));
-			return;
+	bool previoActivo = intermitenteDer_activo;
+
+	if (start2 == 0) {
+		previoActivo = activo;
+		return;
+	}
+
+	if (activo != previoActivo) {
+		if (activo) {
+			SetTimer(3, 500, NULL);
+			intermitenteDer_activo = true;
+			EscribirLog(_T("Intermitente DER ACTIVADO"));
 		}
-		buf[0] = Trans / 256;
-		buf[1] = Trans++ % 256;
-		buf[2] = 0;
-		buf[3] = 0;
-		buf[4] = 0;
-		buf[5] = 6;
-		buf[6] = 0x15;
-		buf[7] = 0x06;
-		buf[8] = addr / 256;
-		buf[9] = addr % 256;
-		buf[10] = intermitenteDer ? 0 : 0;
-		buf[11] = intermitenteDer ? 1 : 0;
-		misoc.Send(buf, 20);
-		misoc.Receive(resp, 20);
-		TransResp = resp[0] * 256 + resp[1] + 1;
-		if (TransResp != Trans) MessageBox(_T("Sin respuesta de luz der.."));
-		misoc.Close();
+		else {
+			KillTimer(3);
+			intermitenteDer_activo = false;
+			EscribirLog(_T("Intermitente DER APAGADO"));
+
+			CClientDC dc(&m_der);
+			CRect rect;
+			m_der.GetClientRect(&rect);
+			dc.FillSolidRect(&rect, RGB(128, 128, 128));
+
+			int addrs[] = { 502, 504 };  // luces izq del y tras
+			for (int i = 0; i < 2; ++i) {
+				CSocket sockLuz;
+				if (!sockLuz.Create()) continue;
+				if (!sockLuz.Connect(m_ip, m_port)) {
+					sockLuz.Close(); continue;
+				}
+				buf[0] = Trans / 256;
+				buf[1] = Trans++ % 256;
+				buf[2] = 0; buf[3] = 0;
+				buf[4] = 0; buf[5] = 6;
+				buf[6] = 0x15;
+				buf[7] = 0x06;
+				buf[8] = addrs[i] / 256;
+				buf[9] = addrs[i] % 256;
+				buf[10] = 0;
+				buf[11] = 0;  // apagar
+
+				sockLuz.Send(buf, 12);
+				sockLuz.Receive(resp, 20);
+				sockLuz.Close();
+			}
+		}
+		previoActivo = activo;
 	}
 }
+
 
 int CClienteDlg::PollingMotor() {
 
 	UpdateData();
 	// Intento crear el Socket con el Slave
-	CSocket misoc;
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_portmot)) {
-		misoc.Close();
-		MessageBox("Fallo en creacion..");
+	CSocket sockMot;
+	if (!sockMot.Create()) {
+		MessageBox(_T("Error al crear socket con Motor para cambios en TEMP"));
 		return temperatura;
 	}
-
+	if (!sockMot.Connect(m_ipmot, m_portmot)) {
+		MessageBox(_T("Fallo en conexion con socket Motor para cambios en TEMP"));
+		sockMot.Close();
+		return temperatura;
+	}
+	
 	//Mando datos
 	temperatura = 0;
 	unsigned char buf[20];
@@ -781,11 +961,11 @@ int CClienteDlg::PollingMotor() {
 	buf[10] = 0 / 256;
 	buf[11] = 0 % 256;
 	UpdateData(0);
-	misoc.Send(buf, 20);
+	sockMot.Send(buf, 20);
 
 	// Verifico que me responde
 	unsigned char resp[20];
-	misoc.Receive(resp, 20);
+	sockMot.Receive(resp, 20);
 
 	temperatura = resp[10] * 256;
 	temperatura += resp[11];
@@ -801,14 +981,18 @@ int CClienteDlg::PollingMotor() {
 	}
 
 	// Cierro el socket
-	misoc.Close();
+	sockMot.Close();
 
 	UpdateData();
 	// Intento crear el Socket con el Slave
-	if (!misoc.Create() || !misoc.Connect(m_ip, m_portmot)) {
-		misoc.Close();
-		MessageBox("Fallo en creacion..");
-		return temperatura;
+	if (!sockMot.Create()) {
+		MessageBox(_T("Error al crear socket con Motor para cambios en RPM"));
+		return revoluciones;
+	}
+	if (!sockMot.Connect(m_ipmot, m_portmot)) {
+		MessageBox(_T("Fallo en conexion con socket Motor para cambios en RPM"));
+		sockMot.Close();
+		return revoluciones;
 	}
 
 	//Mando datos
@@ -826,10 +1010,10 @@ int CClienteDlg::PollingMotor() {
 	buf[10] = 0 / 256;
 	buf[11] = 0 % 256;
 	UpdateData(0);
-	misoc.Send(buf, 20);
+	sockMot.Send(buf, 20);
 
 	// Verifico que me responde
-	misoc.Receive(resp, 20);
+	sockMot.Receive(resp, 20);
 
 	revoluciones = resp[10] * 256;
 	revoluciones += resp[11];
@@ -845,7 +1029,7 @@ int CClienteDlg::PollingMotor() {
 	}
 
 	// Cierro el socket
-	misoc.Close();
+	sockMot.Close();
 
 	return pintar_temp;
 }
@@ -891,7 +1075,7 @@ void CClienteDlg::EscribirLog(const CString& texto)
 {
 	COleDateTime now = COleDateTime::GetCurrentTime();
 	CString timestamp;
-	timestamp.Format("[%02d:%02d:%02d] %s \r\n", now.GetHour(), now.GetMinute(), now.GetSecond(),texto);
+	timestamp.Format("[%02d:%02d:%02d] %s \r\n", now.GetHour(), now.GetMinute(), now.GetSecond(), texto);
 
 	CString logsActuales;
 	m_logs.GetWindowText(logsActuales);
@@ -1044,63 +1228,9 @@ void CClienteDlg::Paint_REVO_Speedometer() {
 
 }
 
-//NUEVO
-void CClienteDlg::OnAccept()
-{
-	CString cs, strIP;
-	UINT port;
-
-	if (m_isConnected)
-		s_conected.Detach();
-
-	if (s_listen.Accept(s_conected)) {
-		s_conected.GetSockName(strIP, port);
-		cs.Format("Cliente conectado: IP=%s puerto=%d", strIP.GetBuffer(), port);
-		EscribirLog(cs);
-		m_isConnected = true;
-	}
-	else {
-		EscribirLog("Error: no se acepta más conexiones");
-	}
-}
-void CClienteDlg::OnReceive()
-{
-	char bufweb[10240];
-	int len = s_conected.Receive(bufweb, sizeof(bufweb) - 1);
-	if (len <= 0) {
-		s_conected.Close();
-		m_isConnected = false;
-		return;
-	}
-
-	bufweb[len] = 0;
-	CString msg = GetMsg(bufweb, len);
-	CString response;
-
-	if (msg.Find("/estado") != -1)
-	{
-		CString json = lastJson;
-
-		const char* header = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n";
-		s_conected.Send(header, strlen(header));
-		s_conected.Send(json.GetBuffer(), json.GetLength());
-	}
-	else
-	{
-		CString html = getPage();
-		const char* header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
-		s_conected.Send(header, strlen(header));
-		s_conected.Send(html.GetBuffer(), html.GetLength());
-	}
-
-	s_conected.Close();
-	m_isConnected = false;
-}
-
-
-
 CString CClienteDlg::getPage()
 {
+	EscribirLog("getPage llamada");
 	CString html;
 	html += "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Estado Vehículo</title>";
 	html += "<style>";
@@ -1150,7 +1280,52 @@ CString CClienteDlg::getPage()
 
 
 
+UINT CClienteDlg::ThreadWebServer(LPVOID pParam)
+{
+	CClienteDlg* pDlg = (CClienteDlg*)pParam;
+	int port = 8088;
 
+	CWebSocket listenSocket;
+	listenSocket.Create(port);
+	listenSocket.Listen();
+	listenSocket.m_pDlg = pDlg;
+
+	CWebSocket clientSocket;
+
+	while (true) {
+		if (listenSocket.Accept(clientSocket)) {
+			clientSocket.m_pDlg = pDlg;
+
+			char bufweb[10240];
+			int len = clientSocket.Receive(bufweb, sizeof(bufweb) - 1);
+			if (len <= 0) {
+				clientSocket.Close();
+				continue;
+			}
+
+			bufweb[len] = 0;
+			CString msg = pDlg->GetMsg(bufweb, len);
+			CString response, header;
+
+			if (msg.Find("/estado") != -1) {
+				header = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n";
+				response = pDlg->lastJson;
+			}
+			else {
+				header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+				response = pDlg->getPage();
+			}
+
+			clientSocket.Send((LPCTSTR)header, header.GetLength());
+			clientSocket.Send((LPCTSTR)response, response.GetLength());
+			clientSocket.Close();
+		}
+		else {
+			Sleep(100); // Evita CPU 100%
+		}
+	}
+	return 0;
+}
 
 
 
@@ -1166,7 +1341,7 @@ CString CClienteDlg::GetMsg(char* buf, int n)
 
 void CClienteDlg::OnClose()
 {
-	s_conected.Close();
-	m_isConnected = false;
 	EscribirLog(_T("Conexión cerrada por el cliente"));
+	CDialogEx::OnClose();
 }
+

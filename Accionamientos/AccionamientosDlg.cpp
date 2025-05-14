@@ -119,7 +119,7 @@ HCURSOR CAccionamientosDlg::OnQueryDragIcon()
 
 void CMySocket::OnAccept(int err)
 {
-	
+
 	CString cs, cs1;
 	CSocket client;
 	Accept(client);  // MySocket acepta el Maestro
@@ -155,9 +155,11 @@ void CMySocket::OnAccept(int err)
 		}
 	}
 	client.Close();
-	
-	
+
+
 }
+
+
 void CAccionamientosDlg::OnBnClickedStart()
 {
 	start = !start;

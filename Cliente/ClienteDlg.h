@@ -78,16 +78,23 @@ public:
 	CStatic m_led_mot;
 
 	// Web server socket
-	CWebSocket s_listen, s_conected;
 	bool m_isConnected;
 
 	// Funciones
-	void OnAccept();
-	void OnReceive();
 	void OnClose();
 	CString getPage();
 	CString GetMsg(char* buf, int n);
 	CString lastJson; //ultimo estado enviado al navegador
 	COleDateTime lastUpdate; //ultimo instante en que hubo cambio de estado
+	static UINT ThreadWebServer(LPVOID pParam);
+	static UINT ThreadParpadeoIzq(LPVOID pParam);
+	static UINT ThreadParpadeoDer(LPVOID pParam);
+
+	CWinThread* handleThreadIzq = nullptr;
+	CWinThread* handleThreadDer = nullptr;
+
+	bool pararParpadeoIzq = false;
+	bool pararParpadeoDer = false;
 };
+
 

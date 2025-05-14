@@ -1,17 +1,13 @@
 #pragma once
+#include <afxsock.h>
 
-class CClienteDlg; // Forward declaration
+class CClienteDlg;  // Declaración adelantada
 
-class CWebSocket : public CAsyncSocket
+class CWebSocket : public CSocket
 {
 public:
     CWebSocket();
     virtual ~CWebSocket();
 
-    CClienteDlg* m_pDlg = nullptr; // Aquí se enlaza con el diálogo
-
-    virtual void OnAccept(int nErrorCode);
-    virtual void OnReceive(int nErrorCode);
-    virtual void OnClose(int nErrorCode);
+    CClienteDlg* m_pDlg;  // Referencia al diálogo, si la necesitas para log o UI
 };
-
