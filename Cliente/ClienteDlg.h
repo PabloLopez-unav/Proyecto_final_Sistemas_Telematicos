@@ -4,7 +4,7 @@
 
 #pragma once
 
-
+#include "websocket.h"
 // CClienteDlg dialog
 class CClienteDlg : public CDialogEx
 {
@@ -76,5 +76,25 @@ public:
 	CEdit m_logs;
 	afx_msg void OnBnClickedClear();
 	CStatic m_led_mot;
+
+	// Web server socket
+	bool m_isConnected;
+
+	// Funciones
+	void OnClose();
+	CString getPage();
+	CString GetMsg(char* buf, int n);
+	CString lastJson; //ultimo estado enviado al navegador
+	COleDateTime lastUpdate; //ultimo instante en que hubo cambio de estado
+	static UINT ThreadWebServer(LPVOID pParam);
+	static UINT ThreadParpadeoIzq(LPVOID pParam);
+	static UINT ThreadParpadeoDer(LPVOID pParam);
+
+	CWinThread* handleThreadIzq = nullptr;
+	CWinThread* handleThreadDer = nullptr;
+
+	bool pararParpadeoIzq = false;
+	bool pararParpadeoDer = false;
 };
+
 
