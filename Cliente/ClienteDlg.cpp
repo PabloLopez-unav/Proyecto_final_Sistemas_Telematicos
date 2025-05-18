@@ -103,7 +103,6 @@ BOOL CClienteDlg::OnInitDialog()
 	cs.Format("WebServer iniciado en puerto %d", port);
 	EscribirLog(cs);
 
-	// Enlazamos sockets con el diálogo
 	m_isConnected = false;
 	AfxBeginThread(ThreadWebServer, this);
 
@@ -150,22 +149,22 @@ HCURSOR CClienteDlg::OnQueryDragIcon()
 
 void CClienteDlg::OnBnClickedStartstop()
 {
-	UpdateData(TRUE); // Leer cuadros de texto
+	UpdateData(TRUE);
 	pollingActivo = !pollingActivo;
 
 	if (pollingActivo)
 	{
-		SetTimer(1, m_tiempo, NULL); // m_tiempo viene del cuadro de edición "Tiempo (ms)"
+		SetTimer(1, m_tiempo, NULL); 
 		EscribirLog("Polling iniciado");
 
-		// --- Forzar reactivación de intermitentes en primera iteración ---
+		// Forzar reactivación de intermitentes en primera iteración 
 		extern bool intermitenteIzq_activo;
 		extern bool intermitenteDer_activo;
 
 		intermitenteIzq_activo = false;
 		intermitenteDer_activo = false;
 
-		// IMPORTANTE: forzar que se detecte cambio en el polling
+		// Forzar que se detecte cambio en el polling
 		static bool previoIzq = false;
 		static bool previoDer = false;
 
@@ -193,7 +192,7 @@ void CClienteDlg::OnBnClickedStartstop()
 		cont1 = 0;
 		cont2 = 0;
 
-		// Reset de luces visuales
+		// Reset de luces 
 		CClientDC dcIzq(&m_izq), dcDer(&m_der), dcFreno(&m_freno);
 		CRect rectIzq, rectDer, rectFreno;
 		m_izq.GetClientRect(&rectIzq);
@@ -235,7 +234,7 @@ void CClienteDlg::OnBnClickedStartstop()
 			buf[7] = 0x06;
 			buf[8] = addrs[i] / 256;
 			buf[9] = addrs[i] % 256;
-			buf[10] = 0;  // apagar
+			buf[10] = 0;  
 			buf[11] = 0;
 
 			sock.Send(buf, 12);
@@ -373,9 +372,9 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 
 		COLORREF color;
 		if (estadoParpadeoIzq)
-			color = RGB(255, 165, 0);  // Naranja
+			color = RGB(255, 165, 0);  
 		else
-			color = RGB(128, 128, 128);  // Gris
+			color = RGB(128, 128, 128);  
 
 		CClientDC dc(&m_izq);
 		CRect rect;
@@ -400,7 +399,7 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			buf[2] = 0; buf[3] = 0;
 			buf[4] = 0; buf[5] = 6;
 			buf[6] = 0x15;
-			buf[7] = 0x06; // Write Single Register
+			buf[7] = 0x06; 
 			buf[8] = addrs[i] / 256;
 			buf[9] = addrs[i] % 256;
 			buf[10] = 0;
@@ -418,9 +417,9 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 
 		COLORREF color;
 		if (estadoParpadeoDer)
-			color = RGB(255, 165, 0);  // Naranja
+			color = RGB(255, 165, 0);  
 		else
-			color = RGB(128, 128, 128);  // Gris
+			color = RGB(128, 128, 128);  
 
 		CClientDC dc(&m_der);
 		CRect rect;
@@ -444,7 +443,7 @@ void CClienteDlg::OnTimer(UINT_PTR nIDEvent)
 			buf[2] = 0; buf[3] = 0;
 			buf[4] = 0; buf[5] = 6;
 			buf[6] = 0x15;
-			buf[7] = 0x06; // Write Single Register
+			buf[7] = 0x06; 
 			buf[8] = addrs[i] / 256;
 			buf[9] = addrs[i] % 256;
 			buf[10] = 0;
@@ -502,7 +501,6 @@ bool CClienteDlg::StartLuces() {
 	// Cierro el socket
 	sockLuz.Close();
 
-	// leo encendido de respuesta, encendido es un booleano
 	start = resp[10] * 256 + resp[11];
 
 	return start;
@@ -551,7 +549,6 @@ bool CClienteDlg::StartAccionador() {
 	// Cierro el socket
 	sockAcc.Close();
 
-	// leo encendido de respuesta, encendido es un booleano
 	start2 = resp[10] * 256 + resp[11];
 
 	if (start2 == 0) {
@@ -563,7 +560,7 @@ bool CClienteDlg::StartAccionador() {
 		intermitenteIzq = false;
 		intermitenteDer = false;
 
-		// Apagar visuales
+		// Apagar LEDs
 		CClientDC dcIzq(&m_izq), dcDer(&m_der);
 		CRect rectIzq, rectDer;
 		m_izq.GetClientRect(&rectIzq);
@@ -619,7 +616,6 @@ bool CClienteDlg::StartMotor() {
 	// Cierro el socket
 	sockMot.Close();
 
-	// leo encendido de respuesta, encendido es un booleano
 	start3 = resp[10] * 256 + resp[11];
 
 
@@ -627,7 +623,6 @@ bool CClienteDlg::StartMotor() {
 }
 
 
-//-------------------------------------------------------------------------------
 void CClienteDlg::PollingLuces_Freno()
 {
 	UpdateData();
@@ -671,12 +666,9 @@ void CClienteDlg::PollingLuces_Freno()
 	// Cierro el socket
 	sockAcc.Close();
 
-	// leo estadoFreno de respuesta, estadoFreno es un booleano
-
 	estadoFreno = resp[10] * 256 + resp[11];
 
-	//-------------------------------------------------------------------------------
-	// No hace falta definir el mismo nombre otra vez que da error
+
 	CSocket sockLuzFreno;
 	if (!sockLuzFreno.Create()) {
 		MessageBox(_T("Error al crear el socket con Accionamientos para freno"));
@@ -757,8 +749,8 @@ void CClienteDlg::PollingLuces_Int_Izq()
 	buf[1] = Trans++ % 256;
 	buf[2] = 0; buf[3] = 0;
 	buf[4] = 0; buf[5] = 6;
-	buf[6] = 0x15; // Unit ID
-	buf[7] = 0x04; // Function code: Read input register
+	buf[6] = 0x15; 
+	buf[7] = 0x04; 
 	buf[8] = 401 / 256;
 	buf[9] = 401 % 256;
 	buf[10] = 0;
@@ -779,9 +771,8 @@ void CClienteDlg::PollingLuces_Int_Izq()
 
 	int valorLeido = resp[10] * 256 + resp[11];
 	bool activo = (valorLeido != 0);
-	intermitenteIzq = activo;  // Actualizar estado global
+	intermitenteIzq = activo;  
 
-	// Estado anterior estático
 	bool previoActivo = intermitenteIzq_activo;
 
 	if (start2 == 0) {
@@ -789,7 +780,6 @@ void CClienteDlg::PollingLuces_Int_Izq()
 		return;
 	}
 
-	// Detectar cambio de estado
 	if (activo != previoActivo) {
 		if (activo) {
 			SetTimer(2, 500, NULL);
@@ -801,11 +791,11 @@ void CClienteDlg::PollingLuces_Int_Izq()
 			intermitenteIzq_activo = false;
 			EscribirLog(_T("Intermitente IZQ APAGADO"));
 
-			// Apagar visual
+			// Apagar LED
 			CClientDC dc(&m_izq);
 			CRect rect;
 			m_izq.GetClientRect(&rect);
-			dc.FillSolidRect(&rect, RGB(128, 128, 128)); // gris
+			dc.FillSolidRect(&rect, RGB(128, 128, 128)); 
 
 			int addrs[] = { 501, 503 };  // luces izq del y tras
 			for (int i = 0; i < 2; ++i) {
@@ -918,7 +908,7 @@ void CClienteDlg::PollingLuces_Int_Der() {
 				buf[8] = addrs[i] / 256;
 				buf[9] = addrs[i] % 256;
 				buf[10] = 0;
-				buf[11] = 0;  // apagar
+				buf[11] = 0;  
 
 				sockLuz.Send(buf, 12);
 				sockLuz.Receive(resp, 20);
@@ -1037,39 +1027,6 @@ int CClienteDlg::PollingMotor() {
 //-------------------------------------------------------------------------------
 
 
-
-
-
-// AUN NO LO USO
-void CClienteDlg::ProcesarRespuestaLuces()
-{
-	if (res[7] == 0x03)
-	{
-		int freno = (res[9] << 8) | res[10];
-		int izq_del = (res[11] << 8) | res[12];
-		int der_del = (res[13] << 8) | res[14];
-		int izq_tras = (res[15] << 8) | res[16];
-		int der_tras = (res[17] << 8) | res[18];
-
-		CString estado;
-		estado.Format("Freno:%d IzqDel:%d DerDel:%d IzqTras:%d DerTras:%d",
-			freno, izq_del, der_del, izq_tras, der_tras);
-
-		EscribirLog(estado);
-
-		// Aquí puedes cambiar colores o textos de tus controles IDC_FRENO, IDC_IZQ, etc.
-		// Ejemplo:
-		m_freno.SetWindowText(freno ? _T("ON") : _T("OFF"));
-		m_izq.SetWindowText(izq_del ? _T("ON") : _T("OFF"));
-
-		// Actualizar LED general de luces
-		m_ledluces.SetWindowText(_T("OK")); // Mejor hacer cambiar color, pero como mínimo poner texto
-	}
-	else
-	{
-		EscribirLog("Error en función recibida");
-	}
-}
 
 void CClienteDlg::EscribirLog(const CString& texto)
 {
@@ -1321,7 +1278,7 @@ UINT CClienteDlg::ThreadWebServer(LPVOID pParam)
 			clientSocket.Close();
 		}
 		else {
-			Sleep(100); // Evita CPU 100%
+			Sleep(100); 
 		}
 	}
 	return 0;
